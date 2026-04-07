@@ -25,7 +25,12 @@ Usage
 from __future__ import annotations
 
 import os
+import sys
 from logging.config import fileConfig
+
+# Ensure the project root is on sys.path so `api` can be imported
+# regardless of where alembic is invoked from (e.g. Render's build env).
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from alembic import context
 from dotenv import load_dotenv
