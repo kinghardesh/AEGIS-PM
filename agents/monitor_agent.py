@@ -90,8 +90,10 @@ DB_PARAMS: Dict[str, str] = {
 LLM_CONFIG: Dict[str, Any] = {
     "config_list": [
         {
-            "model":   os.getenv("OPENAI_MODEL", "gpt-4-turbo"),
-            "api_key": OPENAI_API_KEY,
+            "model":    os.getenv("OPENAI_MODEL", "llama-3.3-70b-versatile"),
+            "api_key":  os.getenv("GROQ_API_KEY", OPENAI_API_KEY),
+            "base_url": "https://api.groq.com/openai/v1",
+            "price":    [0.00059, 0.00079],  # Groq llama-3.3-70b per 1K tokens
         }
     ],
     "temperature": 0.2,   # slight creativity for natural language summaries
@@ -136,19 +138,19 @@ class JiraClient:
         before_sleep=before_sleep_log(log, logging.WARNING),
         reraise=True,
     )
-    async def _get(self, url: str, params: Dict) -> Dict:
-        """Single HTTP GET with retry; returns parsed JSON body."""
+    async def _post(self, url: str, body: Dict) -> Dict:
+        """Single HTTP POST with retry; returns parsed JSON body."""
         async with httpx.AsyncClient(
             auth=self._auth, timeout=30.0, follow_redirects=True
         ) as client:
-            resp = await client.get(url, params=params)
+            resp = await client.post(url, json=body)
 
             # Retry 429 after Retry-After header
             if resp.status_code == 429:
                 retry_after = float(resp.headers.get("Retry-After", "2"))
                 log.warning("Jira rate-limited; sleeping %.1fs", retry_after)
                 await asyncio.sleep(retry_after)
-                resp.raise_for_status()   # will raise → tenacity retries
+                resp.raise_for_status()
 
             resp.raise_for_status()
             return resp.json()
@@ -156,20 +158,23 @@ class JiraClient:
     async def search_issues(
         self,
         jql:         str,
-        fields:      str = "summary,assignee,updated,status,priority,labels",
+        fields:      List[str] = None,
         max_results: int = 100,
     ) -> List[Dict[str, Any]]:
         """
-        Run a JQL query and return a list of Jira issue dicts.
+        Run a JQL query using the current /rest/api/3/search/jql (POST) endpoint.
 
         Retries automatically on 429, 5xx, and network errors.
         Returns [] if all retries are exhausted (logged as error).
         """
-        url    = f"{self._base}/rest/api/3/search"
-        params = {"jql": jql, "maxResults": max_results, "fields": fields}
+        if fields is None:
+            fields = ["summary", "assignee", "updated", "status", "priority", "labels"]
+
+        url  = f"{self._base}/rest/api/3/search/jql"
+        body = {"jql": jql, "maxResults": max_results, "fields": fields}
 
         try:
-            data = await self._get(url, params)
+            data   = await self._post(url, body)
             issues = data.get("issues", [])
             log.debug(
                 "Jira search: %d/%d issues | JQL: %s",
@@ -347,9 +352,10 @@ def check_for_stale_tasks(project_key: str = JIRA_PROJECT) -> str:
     )
 
     try:
-        issues = asyncio.get_event_loop().run_until_complete(
-            _jira.search_issues(jql)
-        )
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        issues = loop.run_until_complete(_jira.search_issues(jql))
+        loop.close()
     except Exception as exc:
         log.error("check_for_stale_tasks: Jira query failed: %s", exc, exc_info=True)
         return json.dumps({

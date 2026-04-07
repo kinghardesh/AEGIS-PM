@@ -856,6 +856,80 @@ async def get_alert_history(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  Routes – Generate alerts from real DB tasks
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.post(
+    "/alerts/generate-from-tasks",
+    summary="Generate alerts from real assigned/in-progress tasks in the DB",
+    tags=["Alerts – CRUD"],
+)
+async def generate_alerts_from_tasks(db: AsyncSession = Depends(get_db)):
+    """
+    Scans all tasks that are assigned to an employee (status != 'done').
+    For each task, creates a pending alert if one does not already exist
+    (matched by task_key = 'TASK-{id}').
+    Returns the count of newly created alerts.
+    """
+    # Fetch all non-done tasks that have an assignee
+    task_rows = await db.execute(
+        sa.select(tasks_table).where(
+            tasks_table.c.assigned_to.isnot(None),
+            tasks_table.c.status != "done",
+        )
+    )
+    tasks = [dict(r) for r in task_rows.mappings().all()]
+
+    if not tasks:
+        return {"created": 0, "skipped": 0, "message": "No assigned non-done tasks found"}
+
+    # Build lookup of existing alert task_keys so we don't duplicate
+    existing_rows = await db.execute(sa.select(alerts_table.c.task_key))
+    existing_keys = {r[0] for r in existing_rows.fetchall()}
+
+    created = 0
+    skipped = 0
+
+    for task in tasks:
+        task_key = f"TASK-{task['id']}"
+        if task_key in existing_keys:
+            skipped += 1
+            continue
+
+        # Get employee email if available
+        emp_email = None
+        if task["assigned_to"]:
+            emp_row = await db.execute(
+                sa.select(employees_table).where(employees_table.c.id == task["assigned_to"])
+            )
+            emp = emp_row.mappings().first()
+            if emp:
+                emp_email = emp.get("email")
+
+        await db.execute(
+            alerts_table.insert().values(
+                task_key=task_key,
+                task_summary=task["title"],
+                assignee=task["assigned_name"] or "Unassigned",
+                assignee_email=emp_email,
+                jira_url=None,
+                last_updated=task.get("created_at"),
+                status="pending",
+                slack_sent=False,
+            )
+        )
+        created += 1
+
+    await db.commit()
+    log.info("Generated %d alerts from real tasks (%d skipped as duplicates)", created, skipped)
+    return {
+        "created": created,
+        "skipped": skipped,
+        "message": f"Created {created} alert(s) from your real tasks ({skipped} already existed)",
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  Routes – Analytics
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -944,6 +1018,46 @@ async def get_analytics(db: AsyncSession = Depends(get_db)):
     )
     slack_sent = slack_result.scalar_one()
 
+    # 6. Projects summary
+    proj_result = await db.execute(sa.select(projects_table))
+    projects = [dict(r) for r in proj_result.mappings().all()]
+    total_projects = len(projects)
+    active_projects = sum(1 for p in projects if p["status"] == "active")
+
+    # 7. Tasks summary
+    task_result = await db.execute(sa.select(tasks_table))
+    all_tasks = [dict(r) for r in task_result.mappings().all()]
+    task_status_dist = {"todo": 0, "in_progress": 0, "done": 0}
+    task_priority_dist = {"high": 0, "medium": 0, "low": 0}
+    for t in all_tasks:
+        s = t.get("status", "todo")
+        if s in task_status_dist:
+            task_status_dist[s] += 1
+        p = t.get("priority", "medium")
+        if p in task_priority_dist:
+            task_priority_dist[p] += 1
+    total_tasks = len(all_tasks)
+    assigned_tasks = sum(1 for t in all_tasks if t.get("assigned_to"))
+
+    # 8. Employee workload
+    emp_result = await db.execute(sa.select(employees_table))
+    employees = [dict(r) for r in emp_result.mappings().all()]
+    total_employees = len(employees)
+    available_employees = sum(1 for e in employees if e.get("availability") == "available")
+    employee_workload = []
+    for emp in employees:
+        emp_tasks = [t for t in all_tasks if t.get("assigned_to") == emp["id"]]
+        employee_workload.append({
+            "name": emp["name"],
+            "role": emp.get("role") or "—",
+            "total_tasks": len(emp_tasks),
+            "done": sum(1 for t in emp_tasks if t.get("status") == "done"),
+            "in_progress": sum(1 for t in emp_tasks if t.get("status") == "in_progress"),
+            "todo": sum(1 for t in emp_tasks if t.get("status") == "todo"),
+            "availability": emp.get("availability", "available"),
+        })
+    employee_workload.sort(key=lambda x: -x["total_tasks"])
+
     return {
         "status_distribution": status_dist,
         "assignee_breakdown": assignee_breakdown,
@@ -955,7 +1069,31 @@ async def get_analytics(db: AsyncSession = Depends(get_db)):
             "resolution_rate": round(total_resolved / max(total_all, 1) * 100, 1),
             "slack_notifications_sent": slack_sent,
             "pending": status_dist.get("pending", 0),
+            # Project/Task/Employee metrics
+            "total_projects": total_projects,
+            "active_projects": active_projects,
+            "total_tasks": total_tasks,
+            "tasks_done": task_status_dist["done"],
+            "tasks_in_progress": task_status_dist["in_progress"],
+            "tasks_todo": task_status_dist["todo"],
+            "assigned_tasks": assigned_tasks,
+            "task_completion_rate": round(task_status_dist["done"] / max(total_tasks, 1) * 100, 1),
+            "total_employees": total_employees,
+            "available_employees": available_employees,
         },
+        "task_status_dist": task_status_dist,
+        "task_priority_dist": task_priority_dist,
+        "employee_workload": employee_workload,
+        "projects_summary": [
+            {
+                "name": p["name"],
+                "status": p["status"],
+                "total_tasks": p.get("total_tasks", 0),
+                "completed_tasks": p.get("completed_tasks", 0),
+                "completion_pct": round(p.get("completed_tasks", 0) / max(p.get("total_tasks", 1), 1) * 100),
+            }
+            for p in projects
+        ],
     }
 
 
@@ -1419,6 +1557,93 @@ async def update_task_status(task_id: int, body: TaskStatusUpdate, db: AsyncSess
     await db.commit()
     updated = await db.execute(sa.select(tasks_table).where(tasks_table.c.id == task_id))
     return dict(updated.mappings().first())
+
+
+class TaskAssignBody(BaseModel):
+    employee_id: int
+    employee_name: str
+
+
+@app.post("/tasks/{task_id}/assign", summary="Manually assign a task to an employee", tags=["Tasks"])
+async def assign_task(task_id: int, body: TaskAssignBody, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(sa.select(tasks_table).where(tasks_table.c.id == task_id))
+    task = result.mappings().first()
+    if not task:
+        raise HTTPException(404, f"Task {task_id} not found")
+
+    # Verify the employee exists
+    emp_result = await db.execute(sa.select(employees_table).where(employees_table.c.id == body.employee_id))
+    employee = emp_result.mappings().first()
+    if not employee:
+        raise HTTPException(404, f"Employee {body.employee_id} not found")
+
+    await db.execute(
+        tasks_table.update().where(tasks_table.c.id == task_id)
+        .values(assigned_to=body.employee_id, assigned_name=body.employee_name)
+    )
+    await db.commit()
+
+    updated = await db.execute(sa.select(tasks_table).where(tasks_table.c.id == task_id))
+    log.info("Task %d manually assigned to employee %d (%s)", task_id, body.employee_id, body.employee_name)
+    return dict(updated.mappings().first())
+
+
+@app.post("/tasks/{task_id}/pause", summary="Pause a task", tags=["Tasks"])
+async def pause_task(task_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(sa.select(tasks_table).where(tasks_table.c.id == task_id))
+    task = result.mappings().first()
+    if not task:
+        raise HTTPException(404, f"Task {task_id} not found")
+    if task["status"] == "paused":
+        raise HTTPException(400, "Task is already paused")
+    await db.execute(tasks_table.update().where(tasks_table.c.id == task_id).values(status="paused"))
+    await db.commit()
+    updated = await db.execute(sa.select(tasks_table).where(tasks_table.c.id == task_id))
+    log.info("Task %d paused (was: %s)", task_id, task["status"])
+    return dict(updated.mappings().first())
+
+
+@app.post("/tasks/{task_id}/resume", summary="Resume a paused task", tags=["Tasks"])
+async def resume_task(task_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(sa.select(tasks_table).where(tasks_table.c.id == task_id))
+    task = result.mappings().first()
+    if not task:
+        raise HTTPException(404, f"Task {task_id} not found")
+    if task["status"] != "paused":
+        raise HTTPException(400, f"Task is not paused (current status: {task['status']})")
+    await db.execute(tasks_table.update().where(tasks_table.c.id == task_id).values(status="in_progress"))
+    await db.commit()
+    updated = await db.execute(sa.select(tasks_table).where(tasks_table.c.id == task_id))
+    log.info("Task %d resumed", task_id)
+    return dict(updated.mappings().first())
+
+
+@app.delete("/tasks/{task_id}", summary="Delete a task", tags=["Tasks"])
+async def delete_task(task_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(sa.select(tasks_table).where(tasks_table.c.id == task_id))
+    task = result.mappings().first()
+    if not task:
+        raise HTTPException(404, f"Task {task_id} not found")
+    proj_id = task["project_id"]
+    await db.execute(tasks_table.delete().where(tasks_table.c.id == task_id))
+    # Recalculate project completed_tasks count
+    done_result = await db.execute(
+        sa.select(sa.func.count()).select_from(tasks_table)
+        .where(tasks_table.c.project_id == proj_id, tasks_table.c.status == "done")
+    )
+    done_count = done_result.scalar_one()
+    total_result = await db.execute(
+        sa.select(sa.func.count()).select_from(tasks_table)
+        .where(tasks_table.c.project_id == proj_id)
+    )
+    total_count = total_result.scalar_one()
+    await db.execute(
+        projects_table.update().where(projects_table.c.id == proj_id)
+        .values(completed_tasks=done_count, total_tasks=total_count)
+    )
+    await db.commit()
+    log.info("Task %d deleted from project %d", task_id, proj_id)
+    return {"deleted": True, "task_id": task_id}
 
 
 # ══════════════════════════════════════════════════════════════════════════════

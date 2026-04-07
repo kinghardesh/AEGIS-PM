@@ -8,88 +8,120 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{
-  --bg:#F7F7F5;--surface:#FFFFFF;--surface2:#F0F0EE;
-  --border:#E8E8E4;--border2:#D8D8D2;
-  --text:#1A1A18;--text2:#6B6B66;--text3:#A8A8A2;
-  --accent:#2B5CE6;--accent-light:#EEF2FF;
-  --green:#16A34A;--green-light:#F0FDF4;
-  --red:#DC2626;--red-light:#FEF2F2;
-  --amber:#D97706;--amber-light:#FFFBEB;
-  --sidebar:220px;--header:56px;
+  --bg:#F1F5F9;--surface:#FFFFFF;--surface2:#F8FAFC;
+  --border:#E2E8F0;--border2:#CBD5E1;
+  --text:#0F172A;--text2:#475569;--text3:#94A3B8;
+  --accent:#6366F1;--accent2:#8B5CF6;--accent-light:#EEF2FF;
+  --green:#10B981;--green-light:#ECFDF5;
+  --red:#EF4444;--red-light:#FEF2F2;
+  --amber:#F59E0B;--amber-light:#FFFBEB;
+  --sidebar:240px;--header:60px;
 }
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;}
 .layout{display:flex;min-height:100vh;}
 
 /* SIDEBAR */
-.sidebar{width:var(--sidebar);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:50;}
-.sidebar-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;height:var(--header);}
-.logo-mark{width:28px;height:28px;background:var(--text);border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.logo-mark svg{width:16px;height:16px;fill:white;}
-.logo-name{font-size:15px;font-weight:600;letter-spacing:-0.3px;}
+.sidebar{width:var(--sidebar);background:#0F172A;display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:50;}
+.sidebar-header{padding:18px 20px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;gap:12px;height:var(--header);}
+.logo-mark{width:32px;height:32px;background:linear-gradient(135deg,#6366F1,#8B5CF6);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 12px rgba(99,102,241,0.4);}
+.logo-mark svg{width:17px;height:17px;fill:white;}
+.logo-name{font-size:15px;font-weight:700;letter-spacing:-0.3px;color:#F8FAFC;}
 .sidebar-section{padding:20px 12px 8px;}
-.sidebar-section-label{font-size:11px;font-weight:500;color:var(--text3);letter-spacing:0.5px;text-transform:uppercase;padding:0 8px;margin-bottom:4px;}
-.nav-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;color:var(--text2);font-size:13.5px;font-weight:400;transition:background 0.15s,color 0.15s;margin-bottom:1px;text-decoration:none;}
-.nav-item:hover{background:var(--surface2);color:var(--text);}
-.nav-item.active{background:var(--accent-light);color:var(--accent);font-weight:500;}
-.nav-item svg{width:16px;height:16px;flex-shrink:0;opacity:0.7;}
+.sidebar-section-label{font-size:10px;font-weight:600;color:#475569;letter-spacing:0.8px;text-transform:uppercase;padding:0 10px;margin-bottom:6px;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;cursor:pointer;color:#94A3B8;font-size:13.5px;font-weight:400;transition:all 0.15s;margin-bottom:2px;text-decoration:none;}
+.nav-item:hover{background:rgba(255,255,255,0.07);color:#E2E8F0;}
+.nav-item.active{background:rgba(99,102,241,0.2);color:#A5B4FC;font-weight:500;}
+.nav-item svg{width:16px;height:16px;flex-shrink:0;opacity:0.6;}
 .nav-item.active svg{opacity:1;}
-.sidebar-footer{margin-top:auto;padding:12px;border-top:1px solid var(--border);}
-.user-pill{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;}
-.avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:white;}
-.user-name{font-size:13px;font-weight:500;}
-.user-role{font-size:11px;color:var(--text3);}
+.nav-badge{margin-left:auto;background:#6366F1;color:white;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;min-width:20px;text-align:center;font-family:'DM Mono',monospace;}
+.nav-badge.amber{background:#F59E0B;}
+.sidebar-footer{margin-top:auto;padding:12px;border-top:1px solid rgba(255,255,255,0.07);}
+.user-pill{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;cursor:pointer;transition:background 0.15s;}
+.user-pill:hover{background:rgba(255,255,255,0.07);}
+.avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#6366F1,#8B5CF6);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:white;flex-shrink:0;}
+.user-name{font-size:13px;font-weight:500;color:#E2E8F0;}
+.user-role{font-size:11px;color:#64748B;}
 
 /* MAIN */
 .main{margin-left:var(--sidebar);flex:1;display:flex;flex-direction:column;min-height:100vh;}
-.topbar{height:var(--header);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:0;z-index:40;}
-.page-title{font-size:15px;font-weight:600;letter-spacing:-0.2px;}
+.topbar{height:var(--header);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:0;z-index:40;box-shadow:0 1px 0 var(--border);}
+.page-title{font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.3px;}
 .content{padding:28px;max-width:1200px;margin:0 auto;width:100%;}
 
 /* TABS */
-.tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:24px;gap:24px;}
-.tab{padding:8px 4px;font-size:14px;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;font-weight:500;}
-.tab.active{color:var(--text);border-bottom-color:var(--accent);}
+.tabs{display:flex;border-bottom:2px solid var(--border);margin-bottom:24px;gap:0;}
+.tab{padding:10px 20px;font-size:14px;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;font-weight:500;transition:all 0.15s;}
+.tab:hover{color:var(--text);}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600;}
 
-/* CARDS & GRIDS */
-.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:24px;}
-.card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
-.card-title{font-size:16px;font-weight:600;}
+/* CARDS */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:24px;box-shadow:0 1px 3px rgba(0,0,0,0.05);}
+.card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;}
+.card-title{font-size:15px;font-weight:700;color:var(--text);}
 
-.btn{padding:8px 16px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:none;display:inline-flex;align-items:center;gap:6px;transition:0.2s;}
-.btn-primary{background:var(--accent);color:white;}
-.btn-primary:hover{opacity:0.9;}
-.btn-secondary{background:var(--surface2);color:var(--text);}
+/* BUTTONS */
+.btn{padding:8px 16px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;border:none;display:inline-flex;align-items:center;gap:6px;transition:all 0.2s;font-family:'DM Sans',sans-serif;}
+.btn-primary{background:linear-gradient(135deg,#6366F1,#8B5CF6);color:white;box-shadow:0 2px 8px rgba(99,102,241,0.3);}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(99,102,241,0.4);}
+.btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
 .btn-secondary:hover{background:var(--border);}
+.btn-danger{background:var(--red-light);color:var(--red);border:1px solid rgba(239,68,68,0.2);}
+.btn-danger:hover{background:var(--red);color:white;}
 
+/* GRID */
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
 
+/* TABLE */
 table{width:100%;border-collapse:collapse;}
 th,td{padding:12px 16px;text-align:left;border-bottom:1px solid var(--border);}
-th{font-size:11px;text-transform:uppercase;color:var(--text3);font-weight:500;}
-td{font-size:13px;}
+th{font-size:11px;text-transform:uppercase;color:var(--text3);font-weight:600;letter-spacing:0.4px;background:var(--surface2);}
+td{font-size:13px;color:var(--text);}
 tr:last-child td{border-bottom:none;}
+tr:hover td{background:#FAFBFF;}
 
-.badge{padding:4px 8px;border-radius:20px;font-size:11px;font-weight:600;background:var(--surface2);color:var(--text2);}
+/* BADGES */
+.badge{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:4px;}
+.badge::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor;}
 .badge.green{background:var(--green-light);color:var(--green);}
 .badge.blue{background:var(--accent-light);color:var(--accent);}
+.badge.amber{background:var(--amber-light);color:var(--amber);}
+.badge.red{background:var(--red-light);color:var(--red);}
 
-.form-group{margin-bottom:16px;}
-.form-label{display:block;font-size:12px;font-weight:500;margin-bottom:6px;color:var(--text2);}
-.form-input,.form-textarea{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;}
+/* SKILLS */
+.skill-tag{display:inline-block;padding:2px 9px;background:var(--accent-light);color:var(--accent);border-radius:20px;font-size:11px;font-weight:600;margin:2px;}
+
+/* FORM */
+.form-group{margin-bottom:18px;}
+.form-label{display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--text2);text-transform:uppercase;letter-spacing:0.4px;}
+.form-input,.form-textarea,.form-select{width:100%;padding:10px 13px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px;color:var(--text);background:var(--surface);transition:border-color 0.15s,box-shadow 0.15s;outline:none;}
+.form-input:focus,.form-textarea:focus,.form-select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(99,102,241,0.1);}
 .form-textarea{height:120px;resize:vertical;}
 
 /* MODAL */
-.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:100;opacity:0;pointer-events:none;transition:0.2s;}
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,0.5);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:100;opacity:0;pointer-events:none;transition:opacity 0.2s;}
 .modal-overlay.open{opacity:1;pointer-events:auto;}
-.modal{background:var(--surface);width:600px;border-radius:12px;padding:24px;box-shadow:0 20px 40px rgba(0,0,0,0.2);transform:translateY(20px);transition:0.2s;}
+.modal{background:var(--surface);width:560px;border-radius:16px;padding:28px;box-shadow:0 24px 48px rgba(0,0,0,0.2);transform:translateY(20px);transition:transform 0.25s;max-height:90vh;overflow-y:auto;}
 .modal-overlay.open .modal{transform:translateY(0);}
-.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
-.modal-title{font-size:18px;font-weight:600;}
-.close-btn{cursor:pointer;color:var(--text3);}
+.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;}
+.modal-title{font-size:17px;font-weight:700;color:var(--text);}
+.close-btn{cursor:pointer;color:var(--text3);width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);transition:all 0.15s;}
+.close-btn:hover{background:var(--surface2);color:var(--text);}
 
+/* TOAST */
 .toast-container{position:fixed;bottom:24px;right:24px;z-index:200;display:flex;flex-direction:column;gap:8px;}
-.toast{background:var(--text);color:white;padding:12px 20px;border-radius:8px;font-size:13px;display:flex;align-items:center;gap:10px;box-shadow:0 10px 20px rgba(0,0,0,0.1);opacity:0;transform:translateY(10px);transition:0.3s;}
+.toast{background:#0F172A;color:white;padding:13px 20px;border-radius:12px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:10px;box-shadow:0 10px 30px rgba(0,0,0,0.15);opacity:0;transform:translateY(10px);transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1);}
 .toast.show{opacity:1;transform:translateY(0);}
+.toast.success{background:linear-gradient(135deg,#059669,#10B981);}
+.toast.error{background:linear-gradient(135deg,#DC2626,#EF4444);}
+.toast.info{background:linear-gradient(135deg,#6366F1,#8B5CF6);}
+
+/* PROGRESS */
+.progress-bar{height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;width:120px;}
+.progress-fill{height:100%;background:linear-gradient(90deg,#6366F1,#8B5CF6);border-radius:3px;transition:width 0.5s;}
+
+/* ASSIGN MODAL DROPDOWN */
+.assign-option{padding:10px 14px;border-radius:8px;cursor:pointer;border:2px solid transparent;transition:all 0.15s;margin-bottom:6px;}
+.assign-option:hover,.assign-option.selected{border-color:var(--accent);background:var(--accent-light);}
 </style>
 </head>
 <body>
@@ -119,12 +151,34 @@ tr:last-child td{border-bottom:none;}
         Analytics
       </a>
     </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Agents</div>
+      <div class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Monitor
+        <span class="nav-badge amber">ON</span>
+      </div>
+      <div class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Communicator
+        <span class="nav-badge amber">ON</span>
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="user-pill">
+        <div class="avatar">PM</div>
+        <div><div class="user-name">Project Manager</div><div class="user-role">Admin</div></div>
+      </div>
+    </div>
   </aside>
 
   <!-- MAIN -->
   <div class="main">
     <header class="topbar">
-      <div class="page-title">Projects & Team</div>
+      <div style="display:flex;align-items:center;gap:16px;">
+  <span class="page-title">Projects & Team</span>
+  <span style="font-size:13px;color:var(--text3);">/ Manage your projects and team</span>
+</div>
     </header>
     <div class="content">
       <div class="tabs">
@@ -160,7 +214,7 @@ tr:last-child td{border-bottom:none;}
           </div>
           <table id="tasks-table">
             <thead>
-              <tr><th>Task</th><th>Priority</th><th>Est. Hours</th><th>Skills</th><th>Assignee</th><th>AI Match</th></tr>
+              <tr><th>Task</th><th>Priority</th><th>Est. Hours</th><th>Skills</th><th>Assignee</th><th>AI Match</th><th>Action</th></tr>
             </thead>
             <tbody></tbody>
           </table>
@@ -176,7 +230,7 @@ tr:last-child td{border-bottom:none;}
           </div>
           <table id="employees-table">
             <thead>
-              <tr><th>Name</th><th>Role</th><th>Skills</th><th>Load</th><th>Status</th></tr>
+              <tr><th>Name</th><th>Role</th><th>Skills</th><th>Load</th><th>Status</th><th>Actions</th></tr>
             </thead>
             <tbody></tbody>
           </table>
@@ -212,7 +266,7 @@ tr:last-child td{border-bottom:none;}
 <div class="modal-overlay" id="employee-modal">
   <div class="modal">
     <div class="modal-header">
-      <h3 class="modal-title">Add Team Member</h3>
+      <h3 class="modal-title" id="emp-modal-title">Add Team Member</h3>
       <div class="close-btn" onclick="closeModals()">✕</div>
     </div>
     <div class="form-group">
@@ -227,7 +281,34 @@ tr:last-child td{border-bottom:none;}
       <label class="form-label">Skills (comma separated)</label>
       <input type="text" class="form-input" id="e-skills" placeholder="react, typescript, ui">
     </div>
-    <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:10px" onclick="createEmployee()">Add Member</button>
+    <div class="form-group">
+      <label class="form-label">Availability</label>
+      <select class="form-input" id="e-availability">
+        <option value="available">Available</option>
+        <option value="busy">Busy</option>
+        <option value="on_leave">On Leave</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" id="btn-save-emp" style="width:100%;justify-content:center;margin-top:10px" onclick="saveEmployee()">Add Member</button>
+  </div>
+</div>
+
+<!-- ASSIGN TASK MODAL -->
+<div class="modal-overlay" id="assign-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Assign Task</h3>
+      <div class="close-btn" onclick="closeModals()">✕</div>
+    </div>
+    <p id="assign-task-title" style="font-size:13px;color:var(--text2);margin-bottom:16px;"></p>
+    <div class="form-group">
+      <label class="form-label">Select Employee</label>
+      <select class="form-input" id="assign-emp-select">
+        <option value="">— Choose employee —</option>
+      </select>
+    </div>
+    <div id="assign-emp-skills" style="margin-bottom:12px;font-size:12px;color:var(--text3);"></div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:10px" onclick="confirmAssign()">Assign</button>
   </div>
 </div>
 
@@ -236,33 +317,122 @@ tr:last-child td{border-bottom:none;}
 <script>
 const API = (location.port === '3000') ? '/api' : 'http://127.0.0.1:8000';
 let currentProjectId = null;
+let editingEmployeeId = null;
+let assigningTaskId = null;
+let allEmployees = [];
 
-function showToast(msg) {
+function showToast(msg, type='info') {
   const c = document.getElementById('toasts');
   const t = document.createElement('div');
   t.className = 'toast show';
+  t.style.background = type==='error' ? 'var(--red)' : type==='success' ? 'var(--green)' : '#1A1A18';
   t.innerHTML = msg;
   c.appendChild(t);
-  setTimeout(()=> { t.classList.remove('show'); setTimeout(()=>t.remove(), 300); }, 3000);
+  setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(), 300); }, 3500);
 }
 
 function switchTab(tab, el) {
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
-  document.getElementById('view-projects').style.display = tab === 'projects' ? 'block' : 'none';
-  document.getElementById('view-employees').style.display = tab === 'employees' ? 'block' : 'none';
-  if(tab === 'projects') loadProjects();
-  if(tab === 'employees') loadEmployees();
+  document.getElementById('view-projects').style.display = tab==='projects' ? 'block' : 'none';
+  document.getElementById('view-employees').style.display = tab==='employees' ? 'block' : 'none';
+  if(tab==='projects') loadProjects();
+  if(tab==='employees') loadEmployees();
 }
 
 function openProjectModal(){ document.getElementById('project-modal').classList.add('open'); }
-function openEmployeeModal(){ document.getElementById('employee-modal').classList.add('open'); }
 function closeModals(){ document.querySelectorAll('.modal-overlay').forEach(m=>m.classList.remove('open')); }
 
+/* ── EMPLOYEE MODAL (create + edit) ─────────────────────────── */
+function openEmployeeModal(emp=null) {
+  editingEmployeeId = emp ? emp.id : null;
+  document.getElementById('emp-modal-title').textContent = emp ? 'Edit Team Member' : 'Add Team Member';
+  document.getElementById('e-name').value        = emp ? emp.name : '';
+  document.getElementById('e-role').value        = emp ? (emp.role||'') : '';
+  document.getElementById('e-skills').value      = emp ? (emp.skills_list||[]).join(', ') : '';
+  document.getElementById('e-availability').value= emp ? (emp.availability||'available') : 'available';
+  document.getElementById('btn-save-emp').textContent = emp ? 'Update Member' : 'Add Member';
+  document.getElementById('employee-modal').classList.add('open');
+}
+
+async function saveEmployee() {
+  const name         = document.getElementById('e-name').value.trim();
+  const role         = document.getElementById('e-role').value.trim();
+  const skillsStr    = document.getElementById('e-skills').value;
+  const availability = document.getElementById('e-availability').value;
+  const skills       = skillsStr.split(',').map(s=>s.trim()).filter(Boolean);
+
+  if(!name){ showToast('Name is required','error'); return; }
+
+  const body = JSON.stringify({name, role, skills, availability});
+
+  if(editingEmployeeId) {
+    await fetch(API+'/employees/'+editingEmployeeId, {
+      method:'PUT', headers:{'Content-Type':'application/json'}, body
+    });
+    showToast('Employee updated!','success');
+  } else {
+    await fetch(API+'/employees', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body
+    });
+    showToast('Employee added!','success');
+  }
+  closeModals();
+  editingEmployeeId = null;
+  loadEmployees();
+}
+
+async function deleteEmployee(id, name, ev) {
+  ev.stopPropagation();
+  if(!confirm(`Delete ${name}?`)) return;
+  await fetch(API+'/employees/'+id, {method:'DELETE'});
+  showToast('Employee removed','success');
+  loadEmployees();
+}
+
+/* ── LOAD EMPLOYEES ─────────────────────────────────────────── */
+async function loadEmployees() {
+  const r   = await fetch(API+'/employees');
+  allEmployees = await r.json();
+  const tb  = document.querySelector('#employees-table tbody');
+  const dSkills = (s) => (s||[]).map(x=>`<span class="badge">${x}</span>`).join(' ');
+
+  if(!allEmployees.length) {
+    tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:20px">No employees yet. Add team members to enable AI task assignment.</td></tr>';
+    return;
+  }
+  tb.innerHTML = allEmployees.map(e=>`
+    <tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="avatar" style="width:28px;height:28px;font-size:11px;">${initials(e.name)}</div>
+          <strong>${e.name}</strong>
+        </div>
+      </td>
+      <td>${e.role||'—'}</td>
+      <td>${dSkills(e.skills_list)}</td>
+      <td><span style="font-weight:500">${e.current_load}</span> tasks</td>
+      <td><span class="badge ${e.availability==='available'?'green':e.availability==='busy'?'amber':'red'}">
+        ${e.availability}</span></td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px;margin-right:4px"
+          onclick="openEmployeeModal(${JSON.stringify(e).replace(/"/g,'&quot;')})">Edit</button>
+        <button class="btn" style="padding:4px 10px;font-size:12px;background:var(--red-light);color:var(--red);border:1px solid var(--red)"
+          onclick="deleteEmployee(${e.id},'${e.name}',event)">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+/* ── PROJECTS ────────────────────────────────────────────────── */
 async function loadProjects() {
-  const r = await fetch(API+'/projects');
+  const r    = await fetch(API+'/projects');
   const projs = await r.json();
-  const tb = document.querySelector('#projects-table tbody');
+  const tb   = document.querySelector('#projects-table tbody');
+  if(!projs.length){
+    tb.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:20px">No projects yet. Create one!</td></tr>';
+    return;
+  }
   tb.innerHTML = projs.map(p=>`
     <tr style="cursor:pointer" onclick="viewProject(${p.id})">
       <td><strong>${p.name}</strong><br><span style="color:var(--text3);font-size:11px">${p.description||''}</span></td>
@@ -280,124 +450,214 @@ async function loadProjects() {
 }
 
 async function createProject() {
-  const name = document.getElementById('p-name').value;
-  const desc = document.getElementById('p-desc').value;
-  const prd = document.getElementById('p-prd').value;
-  
+  const name = document.getElementById('p-name').value.trim();
+  const desc = document.getElementById('p-desc').value.trim();
+  const prd  = document.getElementById('p-prd').value.trim();
+  if(!name){ showToast('Project name required','error'); return; }
   await fetch(API+'/projects', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
+    method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({name, description:desc, prd_text:prd})
   });
   closeModals();
-  document.getElementById('p-name').value='';
-  document.getElementById('p-desc').value='';
-  document.getElementById('p-prd').value='';
-  showToast('Project created successfully!');
+  ['p-name','p-desc','p-prd'].forEach(id=>document.getElementById(id).value='');
+  showToast('Project created!','success');
   loadProjects();
 }
 
 async function viewProject(id) {
   currentProjectId = id;
+  // pre-load employees for assign modal
+  const er = await fetch(API+'/employees');
+  allEmployees = await er.json();
+
   const r = await fetch(API+'/projects/'+id);
   const p = await r.json();
-  
+
   document.getElementById('view-projects').querySelector('.card').style.display='none';
   const detail = document.getElementById('project-detail');
   detail.style.display='block';
-  
+
   document.getElementById('d-proj-name').textContent = p.name;
-  document.getElementById('d-proj-desc').textContent = '< Back to List | ' + (p.description||'');
+  document.getElementById('d-proj-desc').textContent = '← Back to List  |  '+(p.description||'');
   document.getElementById('d-proj-desc').style.cursor='pointer';
-  document.getElementById('d-proj-desc').onclick = () => {
-    document.getElementById('project-detail').style.display='none';
+  document.getElementById('d-proj-desc').onclick = ()=>{
+    detail.style.display='none';
     document.getElementById('view-projects').querySelector('.card').style.display='block';
     loadProjects();
   };
 
-  const tb = document.querySelector('#tasks-table tbody');
-  const dSkills = (skills) => (skills||[]).map(s=>`<span class="badge">${s}</span>`).join(' ');
+  renderTasks(p.tasks||[]);
+}
 
-  if(!p.tasks || !p.tasks.length) {
-    tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text3)">No tasks yet. Click "Auto-Generate Tasks".</td></tr>';
-  } else {
-    tb.innerHTML = p.tasks.map(t=>`
-      <tr>
-        <td><strong>${t.title}</strong><br><span style="font-size:11px;color:var(--text3)">${t.description.substring(0,60)}...</span></td>
-        <td><span class="badge ${t.priority==='high'?'blue':''}">${t.priority}</span></td>
-        <td>${t.estimated_hours}h</td>
-        <td>${dSkills(t.required_skills_list)}</td>
-        <td>${t.assigned_name || '<em style="color:var(--amber)">Unassigned</em>'}</td>
-        <td>${t.ai_confidence ? `<span class="badge green">${t.ai_confidence}% Match</span>` : '—'}</td>
-      </tr>
-    `).join('');
+function renderTasks(tasks) {
+  const tb      = document.querySelector('#tasks-table tbody');
+  const dSkills = (s) => (s||[]).map(x=>`<span class="badge">${x}</span>`).join(' ');
+
+  if(!tasks.length){
+    tb.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px">No tasks yet — click "Auto-Generate Tasks".</td></tr>';
+    return;
   }
-}
-
-async function parsePRD() {
-  showToast('AI is parsing PRD into tasks...');
-  const btn = document.getElementById('btn-parse');
-  btn.disabled = true;
-  await fetch(API+'/projects/'+currentProjectId+'/parse', {method:'POST'});
-  showToast('Tasks generated successfully!');
-  btn.disabled = false;
-  viewProject(currentProjectId);
-}
-
-async function assignTasks() {
-  showToast('AI matching tasks to employees...');
-  const btn = document.getElementById('btn-assign');
-  btn.disabled = true;
-  await fetch(API+'/projects/'+currentProjectId+'/assign-all', {method:'POST'});
-  showToast('Tasks assigned successfully based on skills!');
-  btn.disabled = false;
-  viewProject(currentProjectId);
-}
-
-async function loadEmployees() {
-  const r = await fetch(API+'/employees');
-  const emps = await r.json();
-  const tb = document.querySelector('#employees-table tbody');
-  const dSkills = (skills) => (skills||[]).map(s=>`<span class="badge">${s}</span>`).join(' ');
-  
-  tb.innerHTML = emps.map(e=>`
+  tb.innerHTML = tasks.map(t=>`
     <tr>
       <td>
-        <div class="user-pill" style="padding:0">
-          <div class="avatar" style="width:24px;height:24px;">${initials(e.name)}</div>
-          <strong>${e.name}</strong>
+        <strong>${t.title}</strong>
+        ${t.status==='paused'?'<span style="font-size:10px;background:#FEF3C7;color:#D97706;padding:2px 6px;border-radius:4px;margin-left:6px;font-weight:600;">⏸ PAUSED</span>':''}
+        <br>
+        <span style="font-size:11px;color:var(--text3)">${(t.description||'').substring(0,70)}${t.description&&t.description.length>70?'…':''}</span>
+      </td>
+      <td><span class="badge ${t.priority==='high'?'blue':t.priority==='low'?'':'green'}">${t.priority}</span></td>
+      <td>${t.estimated_hours}h</td>
+      <td>${dSkills(t.required_skills_list)}</td>
+      <td>
+        ${t.assigned_name
+          ? `<div style="display:flex;align-items:center;gap:6px;">
+               <div class="avatar" style="width:22px;height:22px;font-size:9px;">${initials(t.assigned_name)}</div>
+               <span>${t.assigned_name}</span>
+             </div>`
+          : '<em style="color:var(--amber)">Unassigned</em>'}
+      </td>
+      <td>${t.ai_confidence ? `<span class="badge green">${t.ai_confidence}%</span>` : '—'}</td>
+      <td>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px;"
+            onclick="openAssignModal(${t.id},'${t.title.replace(/'/g,"\\'")}',${JSON.stringify(t.required_skills_list||[])})">
+            ${t.assigned_name ? 'Reassign' : 'Assign'}
+          </button>
+          ${t.status === 'paused'
+            ? `<button class="btn" style="padding:4px 10px;font-size:12px;background:linear-gradient(135deg,#10B981,#059669);color:white;border:none;border-radius:7px;cursor:pointer;"
+                 onclick="resumeTask(${t.id})">▶ Resume</button>`
+            : t.status !== 'done'
+            ? `<button class="btn" style="padding:4px 10px;font-size:12px;background:linear-gradient(135deg,#F59E0B,#D97706);color:white;border:none;border-radius:7px;cursor:pointer;"
+                 onclick="pauseTask(${t.id})">⏸ Pause</button>`
+            : ''}
+          <button class="btn" style="padding:4px 10px;font-size:12px;background:linear-gradient(135deg,#EF4444,#DC2626);color:white;border:none;border-radius:7px;cursor:pointer;"
+            onclick="deleteTask(${t.id},'${t.title.replace(/'/g,"\\'")}')">🗑 Delete</button>
         </div>
       </td>
-      <td>${e.role||'—'}</td>
-      <td>${dSkills(e.skills_list)}</td>
-      <td>${e.current_load} tasks</td>
-      <td><span class="badge green">${e.availability}</span></td>
     </tr>
   `).join('');
 }
 
-async function createEmployee() {
-  const name = document.getElementById('e-name').value;
-  const role = document.getElementById('e-role').value;
-  const skillsStr = document.getElementById('e-skills').value;
-  const skills = skillsStr.split(',').map(s=>s.trim()).filter(Boolean);
-  
-  await fetch(API+'/employees', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({name, role, skills})
-  });
-  closeModals();
-  document.getElementById('e-name').value='';
-  document.getElementById('e-role').value='';
-  document.getElementById('e-skills').value='';
-  showToast('Employee added successfully!');
-  loadEmployees();
+/* ── AI PARSE + ASSIGN ──────────────────────────────────────── */
+async function parsePRD() {
+  const btn = document.getElementById('btn-parse');
+  btn.disabled = true; btn.textContent = 'Generating…';
+  showToast('AI is parsing PRD into tasks…');
+  const r = await fetch(API+'/projects/'+currentProjectId+'/parse', {method:'POST'});
+  const data = await r.json();
+  showToast(`✓ ${data.tasks_created} tasks generated!`, 'success');
+  btn.disabled = false; btn.textContent = '1. Auto-Generate Tasks';
+  viewProject(currentProjectId);
 }
 
-function initials(name) { return name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2); }
+async function assignTasks() {
+  // Check employees exist first
+  const empCheck = await fetch(API+'/employees');
+  const emps = await empCheck.json();
+  const available = emps.filter(e=>e.availability==='available');
+  if(!available.length){
+    showToast('⚠ No available employees! Add team members first.','error'); return;
+  }
+  const btn = document.getElementById('btn-assign');
+  btn.disabled = true; btn.textContent = 'Assigning…';
+  showToast('AI matching tasks to employees by skill…');
+  const r    = await fetch(API+'/projects/'+currentProjectId+'/assign-all', {method:'POST'});
+  const data = await r.json();
+  if(data.total_assigned === 0){
+    showToast('No unassigned tasks found — all tasks may already be assigned.','error');
+  } else {
+    showToast(`✓ ${data.total_assigned} task(s) assigned based on skills!`, 'success');
+  }
+  btn.disabled = false; btn.textContent = '2. AI Assign Tasks';
+  viewProject(currentProjectId);
+}
 
-// init
+/* ── MANUAL ASSIGN MODAL ────────────────────────────────────── */
+function openAssignModal(taskId, taskTitle, requiredSkills) {
+  assigningTaskId = taskId;
+  document.getElementById('assign-task-title').textContent = taskTitle;
+
+  const sel = document.getElementById('assign-emp-select');
+  sel.innerHTML = '<option value="">— Choose employee —</option>';
+  allEmployees.forEach(e=>{
+    const match  = requiredSkills.filter(s=>
+      (e.skills_list||[]).map(x=>x.toLowerCase()).includes(s.toLowerCase())
+    );
+    const label  = match.length
+      ? `${e.name} (${e.role||'—'}) ✓ ${match.join(', ')}`
+      : `${e.name} (${e.role||'—'})`;
+    const opt    = document.createElement('option');
+    opt.value    = e.id;
+    opt.textContent = label;
+    if(e.availability !== 'available') { opt.textContent += ' [busy]'; opt.style.color='#999'; }
+    sel.appendChild(opt);
+  });
+
+  document.getElementById('assign-emp-skills').textContent = '';
+  sel.onchange = ()=>{
+    const emp = allEmployees.find(e=>e.id==sel.value);
+    document.getElementById('assign-emp-skills').textContent = emp
+      ? `Skills: ${(emp.skills_list||[]).join(', ')||'none listed'} · Load: ${emp.current_load} tasks`
+      : '';
+  };
+
+  document.getElementById('assign-modal').classList.add('open');
+}
+
+async function confirmAssign() {
+  const empId = document.getElementById('assign-emp-select').value;
+  if(!empId){ showToast('Please select an employee','error'); return; }
+  const emp = allEmployees.find(e=>e.id==empId);
+
+  // Direct DB update via task status endpoint workaround — use the employees PUT
+  // We patch the task via a dedicated fetch to the API
+  await fetch(API+'/tasks/'+assigningTaskId+'/assign', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({employee_id: parseInt(empId), employee_name: emp.name})
+  });
+  closeModals();
+  showToast(`✓ Task assigned to ${emp.name}`, 'success');
+  viewProject(currentProjectId);
+}
+
+function initials(name){ return (name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2); }
+
+async function pauseTask(taskId) {
+  if(!confirm('Pause this task?')) return;
+  const r = await fetch(API+'/tasks/'+taskId+'/pause', {method:'POST'});
+  if(r.ok){
+    showToast('Task paused', 'success');
+    viewProject(currentProjectId);
+  } else {
+    const err = await r.json();
+    showToast(err.detail || 'Failed to pause task', 'error');
+  }
+}
+
+async function resumeTask(taskId) {
+  const r = await fetch(API+'/tasks/'+taskId+'/resume', {method:'POST'});
+  if(r.ok){
+    showToast('Task resumed', 'success');
+    viewProject(currentProjectId);
+  } else {
+    const err = await r.json();
+    showToast(err.detail || 'Failed to resume task', 'error');
+  }
+}
+
+async function deleteTask(taskId, taskTitle) {
+  if(!confirm(`Delete task "${taskTitle}"? This cannot be undone.`)) return;
+  const r = await fetch(API+'/tasks/'+taskId, {method:'DELETE'});
+  if(r.ok){
+    showToast('Task deleted', 'success');
+    viewProject(currentProjectId);
+  } else {
+    const err = await r.json();
+    showToast(err.detail || 'Failed to delete task', 'error');
+  }
+}
+
 loadProjects();
 </script>
 </body>

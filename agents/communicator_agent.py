@@ -47,8 +47,10 @@ OPENAI_API_KEY    = os.environ["OPENAI_API_KEY"]
 AUTOGEN_LLM_CONFIG: Dict[str, Any] = {
     "config_list": [
         {
-            "model": "gpt-4o",
-            "api_key": OPENAI_API_KEY,
+            "model":    os.getenv("OPENAI_MODEL", "llama-3.3-70b-versatile"),
+            "api_key":  os.getenv("GROQ_API_KEY", OPENAI_API_KEY),
+            "base_url": "https://api.groq.com/openai/v1",
+            "price":    [0.00059, 0.00079],
         }
     ],
     "temperature": 0,

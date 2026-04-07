@@ -9,116 +9,147 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{
-  --bg:#F7F7F5;--surface:#FFFFFF;--surface2:#F0F0EE;
-  --border:#E8E8E4;--border2:#D8D8D2;
-  --text:#1A1A18;--text2:#6B6B66;--text3:#A8A8A2;
-  --accent:#2B5CE6;--accent-light:#EEF2FF;
-  --green:#16A34A;--green-light:#F0FDF4;
-  --red:#DC2626;--red-light:#FEF2F2;
-  --amber:#D97706;--amber-light:#FFFBEB;
+  --bg:#F1F5F9;--surface:#FFFFFF;--surface2:#F8FAFC;
+  --border:#E2E8F0;--border2:#CBD5E1;
+  --text:#0F172A;--text2:#475569;--text3:#94A3B8;
+  --accent:#6366F1;--accent2:#8B5CF6;--accent-light:#EEF2FF;
+  --green:#10B981;--green-light:#ECFDF5;
+  --red:#EF4444;--red-light:#FEF2F2;
+  --amber:#F59E0B;--amber-light:#FFFBEB;
   --purple:#7C3AED;--purple-light:#F5F3FF;
   --teal:#0891B2;--teal-light:#F0FDFA;
-  --sidebar:220px;--header:56px;
+  --sidebar:240px;--header:60px;
 }
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;}
 .layout{display:flex;min-height:100vh;}
-
-/* SIDEBAR */
-.sidebar{width:var(--sidebar);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:50;}
-.sidebar-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;height:var(--header);}
-.logo-mark{width:28px;height:28px;background:var(--text);border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.logo-mark svg{width:16px;height:16px;fill:white;}
-.logo-name{font-size:15px;font-weight:600;letter-spacing:-0.3px;color:var(--text);}
+.sidebar{width:var(--sidebar);background:#0F172A;display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:50;}
+.sidebar-header{padding:18px 20px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;gap:12px;height:var(--header);}
+.logo-mark{width:32px;height:32px;background:linear-gradient(135deg,#6366F1,#8B5CF6);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 12px rgba(99,102,241,0.4);}
+.logo-mark svg{width:17px;height:17px;fill:white;}
+.logo-name{font-size:15px;font-weight:700;letter-spacing:-0.3px;color:#F8FAFC;}
 .sidebar-section{padding:20px 12px 8px;}
-.sidebar-section-label{font-size:11px;font-weight:500;color:var(--text3);letter-spacing:0.5px;text-transform:uppercase;padding:0 8px;margin-bottom:4px;}
-.nav-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;color:var(--text2);font-size:13.5px;font-weight:400;transition:background 0.15s,color 0.15s;margin-bottom:1px;text-decoration:none;}
-.nav-item:hover{background:var(--surface2);color:var(--text);}
-.nav-item.active{background:var(--accent-light);color:var(--accent);font-weight:500;}
-.nav-item svg{width:16px;height:16px;flex-shrink:0;opacity:0.7;}
+.sidebar-section-label{font-size:10px;font-weight:600;color:#475569;letter-spacing:0.8px;text-transform:uppercase;padding:0 10px;margin-bottom:6px;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;cursor:pointer;color:#94A3B8;font-size:13.5px;font-weight:400;transition:all 0.15s;margin-bottom:2px;text-decoration:none;}
+.nav-item:hover{background:rgba(255,255,255,0.07);color:#E2E8F0;}
+.nav-item.active{background:rgba(99,102,241,0.2);color:#A5B4FC;font-weight:500;}
+.nav-item svg{width:16px;height:16px;flex-shrink:0;opacity:0.6;}
 .nav-item.active svg{opacity:1;}
-.nav-badge{margin-left:auto;background:var(--amber);color:white;font-size:10px;font-weight:600;padding:2px 6px;border-radius:20px;min-width:18px;text-align:center;font-family:'DM Mono',monospace;}
-.sidebar-footer{margin-top:auto;padding:12px;border-top:1px solid var(--border);}
-.user-pill{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;transition:background 0.15s;}
-.user-pill:hover{background:var(--surface2);}
-.avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:white;flex-shrink:0;}
-.user-name{font-size:13px;font-weight:500;color:var(--text);}
-.user-role{font-size:11px;color:var(--text3);}
-
-/* MAIN */
+.nav-badge{margin-left:auto;background:#6366F1;color:white;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;min-width:20px;text-align:center;font-family:'DM Mono',monospace;}
+.sidebar-footer{margin-top:auto;padding:12px;border-top:1px solid rgba(255,255,255,0.07);}
+.user-pill{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;cursor:pointer;transition:background 0.15s;}
+.user-pill:hover{background:rgba(255,255,255,0.07);}
+.avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#6366F1,#8B5CF6);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:white;flex-shrink:0;}
+.user-name{font-size:13px;font-weight:500;color:#E2E8F0;}
+.user-role{font-size:11px;color:#64748B;}
 .main{margin-left:var(--sidebar);flex:1;display:flex;flex-direction:column;min-height:100vh;}
 .topbar{height:var(--header);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:0;z-index:40;}
 .topbar-left{display:flex;align-items:center;gap:16px;}
-.page-title{font-size:15px;font-weight:600;color:var(--text);letter-spacing:-0.2px;}
+.page-title{font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.3px;}
 .breadcrumb{font-size:13px;color:var(--text3);}
-.status-indicator{display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:6px;background:var(--green-light);font-size:12px;font-weight:500;color:var(--green);}
+.topbar-right{display:flex;align-items:center;gap:10px;}
+.btn-refresh{display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface);font-size:12px;font-weight:500;color:var(--text2);cursor:pointer;transition:all 0.15s;}
+.btn-refresh:hover{background:var(--surface2);color:var(--text);border-color:var(--border2);}
+.status-indicator{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;background:var(--green-light);font-size:12px;font-weight:600;color:var(--green);border:1px solid rgba(16,185,129,0.2);}
 .pulse{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s ease-in-out infinite;}
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.5;transform:scale(0.8);}}
 .content{padding:28px;flex:1;}
+.section-title{font-size:11px;font-weight:700;color:var(--text3);letter-spacing:0.8px;text-transform:uppercase;margin:26px 0 12px;}
+.section-title:first-child{margin-top:0;}
 
 /* METRIC CARDS */
-.metrics-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:28px;}
-.metric-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;position:relative;overflow:hidden;transition:all 0.2s;}
-.metric-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,0.06);}
-.metric-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;}
-.metric-icon svg{width:20px;height:20px;}
-.metric-label{font-size:11px;font-weight:500;color:var(--text3);letter-spacing:0.3px;text-transform:uppercase;margin-bottom:6px;}
-.metric-value{font-family:'DM Mono',monospace;font-size:28px;font-weight:500;color:var(--text);letter-spacing:-1px;line-height:1;}
-.metric-sub{font-size:11px;color:var(--text3);margin-top:6px;}
+.metrics-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:8px;}
+.metrics-row-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:8px;}
+.metric-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px 22px;position:relative;overflow:hidden;transition:all 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.05);}
+.metric-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:14px 14px 0 0;}
+.metric-card.blue::before{background:linear-gradient(90deg,#6366F1,#8B5CF6);}
+.metric-card.green::before{background:linear-gradient(90deg,#10B981,#34D399);}
+.metric-card.amber::before{background:linear-gradient(90deg,#F59E0B,#FCD34D);}
+.metric-card.purple::before{background:linear-gradient(90deg,#7C3AED,#A78BFA);}
+.metric-card.teal::before{background:linear-gradient(90deg,#0891B2,#22D3EE);}
+.metric-card.red::before{background:linear-gradient(90deg,#EF4444,#F87171);}
+.metric-card:hover{transform:translateY(-3px);box-shadow:0 10px 28px rgba(0,0,0,0.08);}
+.metric-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;}
+.metric-icon svg{width:19px;height:19px;}
 .metric-card.blue .metric-icon{background:var(--accent-light);color:var(--accent);}
-.metric-card.amber .metric-icon{background:var(--amber-light);color:var(--amber);}
 .metric-card.green .metric-icon{background:var(--green-light);color:var(--green);}
+.metric-card.amber .metric-icon{background:var(--amber-light);color:var(--amber);}
 .metric-card.purple .metric-icon{background:var(--purple-light);color:var(--purple);}
 .metric-card.teal .metric-icon{background:var(--teal-light);color:var(--teal);}
+.metric-card.red .metric-icon{background:var(--red-light);color:var(--red);}
+.metric-label{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:0.4px;text-transform:uppercase;margin-bottom:6px;}
+.metric-value{font-family:'DM Mono',monospace;font-size:28px;font-weight:500;color:var(--text);letter-spacing:-1px;line-height:1;}
 .metric-card.blue .metric-value{color:var(--accent);}
-.metric-card.amber .metric-value{color:var(--amber);}
 .metric-card.green .metric-value{color:var(--green);}
+.metric-card.amber .metric-value{color:var(--amber);}
+.metric-sub{font-size:11px;color:var(--text3);margin-top:6px;}
 
-/* CHARTS GRID */
-.charts-grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:20px;}
-.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;}
-.chart-card h3{font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;}
-.chart-card .chart-sub{font-size:11px;color:var(--text3);margin-bottom:20px;}
+/* CHARTS */
+.charts-grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px;}
+.charts-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px;}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;box-shadow:0 1px 3px rgba(0,0,0,0.05);}
+.chart-card h3{font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px;}
+.chart-card .chart-sub{font-size:11px;color:var(--text3);margin-bottom:18px;}
+.chart-wrap{position:relative;height:180px;}
 
-/* ASSIGNEE TABLE */
-.bottom-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
-.table-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;}
-.table-card h3{font-size:13px;font-weight:600;color:var(--text);margin-bottom:16px;}
+/* TABLES */
+.bottom-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+.table-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;box-shadow:0 1px 3px rgba(0,0,0,0.05);}
+.table-card h3{font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px;}
 .data-table{width:100%;border-collapse:separate;border-spacing:0;}
-.data-table th{font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:0.3px;padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);}
-.data-table td{font-size:13px;color:var(--text);padding:10px 12px;border-bottom:1px solid var(--border);}
+.data-table th{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);background:var(--surface2);}
+.data-table td{font-size:12.5px;color:var(--text);padding:9px 10px;border-bottom:1px solid var(--border);}
 .data-table tr:last-child td{border-bottom:none;}
-.data-table tr:hover td{background:var(--surface2);}
+.data-table tr:hover td{background:#FAFBFF;}
 .assignee-cell{display:flex;align-items:center;gap:8px;}
-.assignee-dot{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;color:white;flex-shrink:0;}
-.status-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;}
-.status-badge.pending{background:var(--amber-light);color:var(--amber);}
-.status-badge.approved{background:var(--green-light);color:var(--green);}
-.status-badge.dismissed{background:var(--red-light);color:var(--red);}
-.status-badge::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor;}
+.assignee-dot{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:white;flex-shrink:0;}
 
-/* ACTIVITY FEED */
-.activity-item{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);}
+/* BADGES */
+.badge{display:inline-flex;align-items:center;gap:3px;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;}
+.badge::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor;}
+.badge.pending{background:var(--amber-light);color:#D97706;}
+.badge.approved{background:var(--green-light);color:var(--green);}
+.badge.dismissed{background:var(--red-light);color:var(--red);}
+.badge.notified{background:var(--accent-light);color:var(--accent);}
+.badge.available{background:var(--green-light);color:var(--green);}
+.badge.busy{background:var(--amber-light);color:var(--amber);}
+.badge.unavailable,.badge.on_leave{background:var(--red-light);color:var(--red);}
+.badge.active{background:var(--green-light);color:var(--green);}
+.badge.done{background:var(--surface2);color:var(--text2);}
+.badge.high{background:var(--red-light);color:var(--red);}
+.badge.medium{background:var(--amber-light);color:var(--amber);}
+.badge.low{background:var(--green-light);color:var(--green);}
+
+/* PROGRESS */
+.progress-bar{height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;}
+.progress-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#6366F1,#8B5CF6);transition:width 0.6s;}
+.progress-fill.green{background:linear-gradient(90deg,#10B981,#34D399);}
+.progress-fill.amber{background:linear-gradient(90deg,#F59E0B,#FCD34D);}
+
+/* ACTIVITY */
+.activity-item{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);}
 .activity-item:last-child{border-bottom:none;}
-.activity-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px;}
+.activity-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px;font-weight:700;}
 .activity-icon.approve{background:var(--green-light);color:var(--green);}
 .activity-icon.dismiss{background:var(--red-light);color:var(--red);}
 .activity-icon.create{background:var(--accent-light);color:var(--accent);}
 .activity-text{font-size:12px;color:var(--text2);}
-.activity-text strong{color:var(--text);font-weight:500;}
+.activity-text strong{color:var(--text);font-weight:600;}
 .activity-time{font-size:10px;color:var(--text3);margin-top:2px;font-family:'DM Mono',monospace;}
+
+/* EMPTY */
+.empty-hint{color:var(--text3);font-size:12px;padding:16px 0;text-align:center;}
 
 /* LOADING */
 .loading{display:flex;align-items:center;justify-content:center;padding:60px;color:var(--text3);font-size:13px;}
 .spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.6s linear infinite;margin-right:10px;}
 @keyframes spin{to{transform:rotate(360deg);}}
 
-@media(max-width:1200px){.metrics-row{grid-template-columns:repeat(3,1fr);}.charts-grid,.bottom-grid{grid-template-columns:1fr;}}
-@media(max-width:900px){.sidebar{display:none;}.main{margin-left:0;}.metrics-row{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:1200px){.metrics-row,.metrics-row-3{grid-template-columns:repeat(2,1fr);}.charts-grid,.charts-grid-3,.bottom-grid{grid-template-columns:1fr;}}
+@media(max-width:900px){.sidebar{display:none;}.main{margin-left:0;}.metrics-row,.metrics-row-3{grid-template-columns:repeat(2,1fr);}}
 </style>
 </head>
 <body>
 <div class="layout">
-  <!-- SIDEBAR -->
   <aside class="sidebar">
     <div class="sidebar-header">
       <div class="logo-mark"><svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.25 3.75 10.15 9 11.35C17.25 21.15 21 16.25 21 11V5L12 1z"/></svg></div>
@@ -164,18 +195,23 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
     </div>
   </aside>
 
-  <!-- MAIN -->
   <div class="main">
     <header class="topbar">
       <div class="topbar-left">
         <span class="page-title">Analytics</span>
         <span class="breadcrumb">/ Project Intelligence</span>
       </div>
-      <div class="status-indicator"><div class="pulse"></div> Live Data</div>
+      <div class="topbar-right">
+        <button class="btn-refresh" onclick="loadAnalytics()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Refresh
+        </button>
+        <div class="status-indicator"><div class="pulse"></div> Live Data</div>
+      </div>
     </header>
 
     <div class="content" id="main-content">
-      <div class="loading" id="loading"><div class="spinner"></div>Loading analytics data...</div>
+      <div class="loading" id="loading"><div class="spinner"></div>Loading analytics...</div>
     </div>
   </div>
 </div>
@@ -183,77 +219,103 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 <script>
 const API = (location.port === '3000') ? '/api' : 'http://127.0.0.1:8000';
 const avatarColors = ['#7C3AED','#2563EB','#059669','#DC2626','#D97706','#0891B2'];
-const getColor = name => avatarColors[name.charCodeAt(0)%avatarColors.length];
-const initials = name => name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+const getColor = name => avatarColors[(name||'?').charCodeAt(0) % avatarColors.length];
+const initials  = name => (name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+
+let charts = [];
 
 async function loadAnalytics(){
   try{
     const r = await fetch(`${API}/analytics`);
+    if(!r.ok) throw new Error(r.status);
     const data = await r.json();
+    charts.forEach(c => c.destroy());
+    charts = [];
     renderAnalytics(data);
   } catch(e){
     document.getElementById('main-content').innerHTML = `
-      <div class="loading" style="color:var(--red)">
-        ⚠ Failed to load analytics — is the backend running?
-      </div>`;
+      <div class="loading" style="color:var(--red)">Failed to load analytics — is the backend running?</div>`;
   }
 }
 
 function renderAnalytics(data){
   const m = data.metrics;
   const content = document.getElementById('main-content');
-  
+
   content.innerHTML = `
-    <!-- METRIC CARDS -->
+    <!-- ── PROJECT + TASK OVERVIEW ── -->
+    <div class="section-title">Projects & Tasks</div>
     <div class="metrics-row">
       <div class="metric-card blue">
-        <div class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
-        <div class="metric-label">Total Alerts</div>
-        <div class="metric-value">${m.total_alerts}</div>
-        <div class="metric-sub">All time tracked</div>
-      </div>
-      <div class="metric-card amber">
-        <div class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
-        <div class="metric-label">Pending Review</div>
-        <div class="metric-value">${m.pending}</div>
-        <div class="metric-sub">Awaiting HITL decision</div>
+        <div class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>
+        <div class="metric-label">Total Projects</div>
+        <div class="metric-value">${m.total_projects}</div>
+        <div class="metric-sub">${m.active_projects} active</div>
       </div>
       <div class="metric-card green">
-        <div class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></div>
-        <div class="metric-label">Resolved</div>
-        <div class="metric-value">${m.total_resolved}</div>
-        <div class="metric-sub">${m.resolution_rate}% resolution rate</div>
+        <div class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+        <div class="metric-label">Tasks Done</div>
+        <div class="metric-value">${m.tasks_done}</div>
+        <div class="metric-sub">${m.task_completion_rate}% completion rate</div>
+      </div>
+      <div class="metric-card amber">
+        <div class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+        <div class="metric-label">In Progress</div>
+        <div class="metric-value">${m.tasks_in_progress}</div>
+        <div class="metric-sub">${m.tasks_todo} still to do</div>
       </div>
       <div class="metric-card purple">
-        <div class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
-        <div class="metric-label">Slack Sent</div>
-        <div class="metric-value">${m.slack_notifications_sent}</div>
-        <div class="metric-sub">Notifications delivered</div>
-      </div>
-      <div class="metric-card teal">
-        <div class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
-        <div class="metric-label">Assignees</div>
-        <div class="metric-value">${data.assignee_breakdown.length}</div>
-        <div class="metric-sub">Unique team members</div>
+        <div class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+        <div class="metric-label">Team Members</div>
+        <div class="metric-value">${m.total_employees}</div>
+        <div class="metric-sub">${m.available_employees} available</div>
       </div>
     </div>
 
-    <!-- CHARTS ROW -->
-    <div class="charts-grid">
+    <!-- ── TASK CHARTS ── -->
+    <div class="charts-grid-3" style="margin-top:16px;">
+      <div class="chart-card">
+        <h3>Task Status</h3>
+        <p class="chart-sub">Distribution across all projects</p>
+        <div class="chart-wrap"><canvas id="taskStatusChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Task Priority</h3>
+        <p class="chart-sub">High / Medium / Low breakdown</p>
+        <div class="chart-wrap"><canvas id="taskPriorityChart"></canvas></div>
+      </div>
       <div class="chart-card">
         <h3>Alert Trend — Last 7 Days</h3>
-        <p class="chart-sub">Daily alert detection frequency</p>
-        <canvas id="trendChart" height="200"></canvas>
-      </div>
-      <div class="chart-card">
-        <h3>Status Distribution</h3>
-        <p class="chart-sub">Current breakdown by status</p>
-        <canvas id="statusChart" height="200"></canvas>
+        <p class="chart-sub">Daily stale-task detection</p>
+        <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
       </div>
     </div>
 
-    <!-- BOTTOM ROW -->
+    <!-- ── PROJECTS TABLE ── -->
+    <div class="section-title">Project Breakdown</div>
+    <div class="table-card" style="margin-bottom:16px;">
+      <table class="data-table">
+        <thead>
+          <tr><th>Project</th><th>Status</th><th>Tasks</th><th>Completed</th><th>Progress</th></tr>
+        </thead>
+        <tbody id="projects-tbody"></tbody>
+      </table>
+      ${data.projects_summary.length === 0 ? '<div class="empty-hint">No projects yet — create one in Projects & Team</div>' : ''}
+    </div>
+
+    <!-- ── EMPLOYEE WORKLOAD + ALERTS ── -->
+    <div class="section-title">Team & Alerts</div>
     <div class="bottom-grid">
+      <div class="table-card">
+        <h3>Employee Workload</h3>
+        <table class="data-table">
+          <thead>
+            <tr><th>Employee</th><th>Role</th><th>Tasks</th><th>Done</th><th>Status</th></tr>
+          </thead>
+          <tbody id="workload-tbody"></tbody>
+        </table>
+        ${data.employee_workload.length === 0 ? '<div class="empty-hint">No employees yet — add team members in Projects & Team</div>' : ''}
+      </div>
       <div class="table-card">
         <h3>Alerts by Assignee</h3>
         <table class="data-table">
@@ -262,20 +324,80 @@ function renderAnalytics(data){
           </thead>
           <tbody id="assignee-tbody"></tbody>
         </table>
-        ${data.assignee_breakdown.length === 0 ? '<p style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center;">No data yet — seed alerts from the dashboard</p>' : ''}
+        ${data.assignee_breakdown.length === 0 ? '<div class="empty-hint">No alerts yet — click Generate Alerts on the Dashboard</div>' : ''}
+      </div>
+    </div>
+
+    <!-- ── ALERT OVERVIEW + ACTIVITY ── -->
+    <div class="section-title">Alert Overview</div>
+    <div class="bottom-grid">
+      <div class="chart-card">
+        <h3>Alert Status Distribution</h3>
+        <p class="chart-sub">Current breakdown across all alerts</p>
+        <div class="chart-wrap"><canvas id="statusChart"></canvas></div>
+        <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div style="text-align:center;padding:10px;background:var(--surface2);border-radius:8px;">
+            <div style="font-family:'DM Mono';font-size:20px;font-weight:500;color:var(--accent)">${m.total_alerts}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px;">Total Alerts</div>
+          </div>
+          <div style="text-align:center;padding:10px;background:var(--surface2);border-radius:8px;">
+            <div style="font-family:'DM Mono';font-size:20px;font-weight:500;color:var(--green)">${m.resolution_rate}%</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px;">Resolution Rate</div>
+          </div>
+        </div>
       </div>
       <div class="table-card">
         <h3>Recent Activity</h3>
         <div id="activity-feed"></div>
-        ${data.recent_activity.length === 0 ? '<p style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center;">No activity yet — approve or dismiss alerts</p>' : ''}
+        ${data.recent_activity.length === 0 ? '<div class="empty-hint">No activity yet — approve or dismiss alerts on the Dashboard</div>' : ''}
       </div>
     </div>
   `;
 
-  // Render assignee table
-  const tbody = document.getElementById('assignee-tbody');
-  if(tbody){
-    tbody.innerHTML = data.assignee_breakdown.map(a => `
+  // Projects table
+  const ptbody = document.getElementById('projects-tbody');
+  if(ptbody && data.projects_summary.length){
+    ptbody.innerHTML = data.projects_summary.map(p => {
+      const pct = p.completion_pct;
+      const barColor = pct === 100 ? 'green' : pct >= 50 ? '' : 'amber';
+      return `<tr>
+        <td><strong>${p.name}</strong></td>
+        <td><span class="badge ${p.status}">${p.status}</span></td>
+        <td>${p.total_tasks}</td>
+        <td>${p.completed_tasks}</td>
+        <td style="min-width:120px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div class="progress-bar" style="flex:1;"><div class="progress-fill ${barColor}" style="width:${pct}%"></div></div>
+            <span style="font-size:11px;font-family:'DM Mono';color:var(--text3);min-width:32px;">${pct}%</span>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Employee workload table
+  const wtbody = document.getElementById('workload-tbody');
+  if(wtbody && data.employee_workload.length){
+    wtbody.innerHTML = data.employee_workload.map(e => `
+      <tr>
+        <td>
+          <div class="assignee-cell">
+            <div class="assignee-dot" style="background:${getColor(e.name)}">${initials(e.name)}</div>
+            ${e.name}
+          </div>
+        </td>
+        <td style="color:var(--text2)">${e.role}</td>
+        <td><strong>${e.total_tasks}</strong></td>
+        <td>${e.done > 0 ? `<span style="color:var(--green);font-weight:500">${e.done}</span>` : '—'}</td>
+        <td><span class="badge ${e.availability}">${e.availability}</span></td>
+      </tr>
+    `).join('');
+  }
+
+  // Assignee breakdown table
+  const atbody = document.getElementById('assignee-tbody');
+  if(atbody && data.assignee_breakdown.length){
+    atbody.innerHTML = data.assignee_breakdown.map(a => `
       <tr>
         <td>
           <div class="assignee-cell">
@@ -284,165 +406,103 @@ function renderAnalytics(data){
           </div>
         </td>
         <td><strong>${a.total}</strong></td>
-        <td>${a.pending > 0 ? `<span class="status-badge pending">${a.pending}</span>` : '—'}</td>
-        <td>${(a.approved + a.dismissed + a.notified) > 0 ? `<span class="status-badge approved">${a.approved + a.dismissed + a.notified}</span>` : '—'}</td>
+        <td>${a.pending > 0 ? `<span class="badge pending">${a.pending}</span>` : '—'}</td>
+        <td>${(a.approved + a.dismissed + a.notified) > 0 ? `<span class="badge approved">${a.approved + a.dismissed + a.notified}</span>` : '—'}</td>
       </tr>
     `).join('');
   }
 
-  // Render activity feed
+  // Activity feed
   const feed = document.getElementById('activity-feed');
-  if(feed && data.recent_activity.length > 0){
-    feed.innerHTML = data.recent_activity.slice(0, 8).map(a => {
-      const iconClass = a.to_status === 'approved' ? 'approve' : a.to_status === 'dismissed' ? 'dismiss' : 'create';
-      const icon = a.to_status === 'approved' ? '✓' : a.to_status === 'dismissed' ? '✕' : '＋';
-      const time = new Date(a.created_at).toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
+  if(feed && data.recent_activity.length){
+    feed.innerHTML = data.recent_activity.slice(0,8).map(a => {
+      const cls  = a.to_status === 'approved' ? 'approve' : a.to_status === 'dismissed' ? 'dismiss' : 'create';
+      const icon = a.to_status === 'approved' ? '✓' : a.to_status === 'dismissed' ? '✕' : '+';
+      const time = new Date(a.created_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
       return `
         <div class="activity-item">
-          <div class="activity-icon ${iconClass}">${icon}</div>
+          <div class="activity-icon ${cls}">${icon}</div>
           <div>
-            <div class="activity-text">
-              <strong>Alert #${a.alert_id}</strong> ${a.from_status ? `${a.from_status} → ` : ''}${a.to_status}
-              ${a.notes ? `<br><span style="color:var(--text3)">${a.notes}</span>` : ''}
-            </div>
-            <div class="activity-time">${time} · by ${a.actor}</div>
+            <div class="activity-text"><strong>Alert #${a.alert_id}</strong> ${a.from_status ? a.from_status+' → ' : ''}${a.to_status}</div>
+            <div class="activity-time">${time} · ${a.actor}</div>
           </div>
-        </div>
-      `;
+        </div>`;
     }).join('');
   }
 
   // Render charts
-  renderTrendChart(data.daily_trend);
-  renderStatusChart(data.status_distribution);
+  charts.push(renderDoughnut('taskStatusChart', data.task_status_dist, {
+    todo:        { color: '#A8A8A2', label: 'To Do'      },
+    in_progress: { color: '#D97706', label: 'In Progress'},
+    done:        { color: '#16A34A', label: 'Done'       },
+  }));
+  charts.push(renderDoughnut('taskPriorityChart', data.task_priority_dist, {
+    high:   { color: '#DC2626', label: 'High'   },
+    medium: { color: '#D97706', label: 'Medium' },
+    low:    { color: '#16A34A', label: 'Low'    },
+  }));
+  charts.push(renderTrendChart(data.daily_trend));
+  charts.push(renderDoughnut('statusChart', data.status_distribution, {
+    pending:   { color: '#D97706', label: 'Pending'   },
+    approved:  { color: '#16A34A', label: 'Approved'  },
+    dismissed: { color: '#DC2626', label: 'Dismissed' },
+    notified:  { color: '#2B5CE6', label: 'Notified'  },
+  }));
+}
+
+function renderDoughnut(id, distObj, colorMap){
+  const ctx = document.getElementById(id);
+  if(!ctx) return null;
+  const labels=[], values=[], colors=[];
+  for(const [key, val] of Object.entries(distObj)){
+    if(val === 0) continue;
+    const cfg = colorMap[key] || { color:'#E8E8E4', label: key };
+    labels.push(cfg.label);
+    values.push(val);
+    colors.push(cfg.color);
+  }
+  if(values.length === 0){ labels.push('No Data'); values.push(1); colors.push('#E8E8E4'); }
+  return new Chart(ctx, {
+    type:'doughnut',
+    data:{ labels, datasets:[{ data:values, backgroundColor:colors, borderColor:'#fff', borderWidth:3, hoverOffset:6 }]},
+    options:{
+      responsive:true, maintainAspectRatio:false, cutout:'62%',
+      plugins:{
+        legend:{ position:'bottom', labels:{ padding:12, usePointStyle:true, pointStyle:'circle', font:{family:"'DM Sans'",size:11} } },
+        tooltip:{ backgroundColor:'#1A1A18', padding:10, cornerRadius:8, titleFont:{family:"'DM Sans'",size:12}, bodyFont:{family:"'DM Mono'",size:11} }
+      }
+    }
+  });
 }
 
 function renderTrendChart(trend){
   const ctx = document.getElementById('trendChart');
-  if(!ctx) return;
-  
-  const gradient = ctx.getContext('2d').createLinearGradient(0,0,0,200);
-  gradient.addColorStop(0, 'rgba(43,92,230,0.15)');
-  gradient.addColorStop(1, 'rgba(43,92,230,0.01)');
-
-  new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: trend.map(d => d.label),
-      datasets: [{
-        label: 'Alerts',
-        data: trend.map(d => d.count),
-        borderColor: '#2B5CE6',
-        backgroundColor: gradient,
-        borderWidth: 2.5,
-        fill: true,
-        tension: 0.4,
-        pointRadius: 4,
-        pointBackgroundColor: '#2B5CE6',
-        pointBorderColor: '#fff',
-        pointBorderWidth: 2,
-        pointHoverRadius: 6,
+  if(!ctx) return null;
+  const gradient = ctx.getContext('2d').createLinearGradient(0,0,0,180);
+  gradient.addColorStop(0,'rgba(43,92,230,0.15)');
+  gradient.addColorStop(1,'rgba(43,92,230,0.01)');
+  return new Chart(ctx, {
+    type:'line',
+    data:{
+      labels: trend.map(d=>d.label),
+      datasets:[{
+        label:'Alerts', data:trend.map(d=>d.count),
+        borderColor:'#2B5CE6', backgroundColor:gradient,
+        borderWidth:2.5, fill:true, tension:0.4,
+        pointRadius:4, pointBackgroundColor:'#2B5CE6', pointBorderColor:'#fff', pointBorderWidth:2,
       }]
     },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#1A1A18',
-          titleFont: { family: "'DM Sans'", size: 12 },
-          bodyFont: { family: "'DM Mono'", size: 11 },
-          padding: 10,
-          cornerRadius: 8,
-          displayColors: false,
-        }
-      },
-      scales: {
-        x: {
-          grid: { display: false },
-          ticks: { font: { family: "'DM Sans'", size: 11 }, color: '#A8A8A2' }
-        },
-        y: {
-          beginAtZero: true,
-          grid: { color: '#F0F0EE' },
-          ticks: {
-            font: { family: "'DM Mono'", size: 11 },
-            color: '#A8A8A2',
-            stepSize: 1,
-          }
-        }
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{backgroundColor:'#1A1A18',padding:10,cornerRadius:8,titleFont:{family:"'DM Sans'",size:12},bodyFont:{family:"'DM Mono'",size:11},displayColors:false} },
+      scales:{
+        x:{ grid:{display:false}, ticks:{font:{family:"'DM Sans'",size:11},color:'#A8A8A2'} },
+        y:{ beginAtZero:true, grid:{color:'#F0F0EE'}, ticks:{font:{family:"'DM Mono'",size:11},color:'#A8A8A2',stepSize:1} }
       }
     }
   });
 }
 
-function renderStatusChart(dist){
-  const ctx = document.getElementById('statusChart');
-  if(!ctx) return;
-
-  const labels = [], values = [], colors = [], borderColors = [];
-  const colorMap = {
-    pending:   { bg: '#FFFBEB', border: '#D97706' },
-    approved:  { bg: '#F0FDF4', border: '#16A34A' },
-    dismissed: { bg: '#FEF2F2', border: '#DC2626' },
-    notified:  { bg: '#EEF2FF', border: '#2B5CE6' },
-  };
-
-  for(const [status, count] of Object.entries(dist)){
-    labels.push(status.charAt(0).toUpperCase() + status.slice(1));
-    values.push(count);
-    const c = colorMap[status] || { bg: '#F0F0EE', border: '#6B6B66' };
-    colors.push(c.border);
-    borderColors.push('#fff');
-  }
-
-  if(values.length === 0){
-    labels.push('No Data');
-    values.push(1);
-    colors.push('#E8E8E4');
-    borderColors.push('#fff');
-  }
-
-  new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels,
-      datasets: [{
-        data: values,
-        backgroundColor: colors,
-        borderColor: borderColors,
-        borderWidth: 3,
-        hoverOffset: 8,
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      cutout: '65%',
-      plugins: {
-        legend: {
-          position: 'bottom',
-          labels: {
-            padding: 16,
-            usePointStyle: true,
-            pointStyle: 'circle',
-            font: { family: "'DM Sans'", size: 11 }
-          }
-        },
-        tooltip: {
-          backgroundColor: '#1A1A18',
-          titleFont: { family: "'DM Sans'", size: 12 },
-          bodyFont: { family: "'DM Mono'", size: 11 },
-          padding: 10,
-          cornerRadius: 8,
-        }
-      }
-    }
-  });
-}
-
-// Auto-refresh every 30s
 loadAnalytics();
 setInterval(loadAnalytics, 30000);
 </script>

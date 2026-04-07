@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(py -3.11 --version)",
+      "Bash(python3.11 --version)",
+      "Bash(PGPASSWORD=root \"C:/Program Files/PostgreSQL/18/bin/createdb.exe\" -U postgres -p 5432 -h localhost -O aegis aegispm)"
+    ]
+  }
+}

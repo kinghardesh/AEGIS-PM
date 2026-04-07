@@ -55,7 +55,7 @@ from dotenv import load_dotenv
 
 from agents.monitor_agent import (
     check_for_stale_tasks,
-    register_alert,
+    save_alert as register_alert,
 )
 from agents.communicator_agent import (
     fetch_approved_alerts,
@@ -70,10 +70,16 @@ log = logging.getLogger("aegis.groupchat")
 
 JIRA_PROJECT   = os.environ["JIRA_PROJECT_KEY"]
 STALE_DAYS     = int(os.getenv("STALE_DAYS", "2"))
-OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+GROQ_API_KEY   = os.getenv("GROQ_API_KEY", OPENAI_API_KEY)
 
 _LLM_CONFIG: Dict[str, Any] = {
-    "config_list": [{"model": "gpt-4o", "api_key": OPENAI_API_KEY}],
+    "config_list": [{
+        "model":    os.getenv("OPENAI_MODEL", "llama-3.3-70b-versatile"),
+        "api_key":  GROQ_API_KEY,
+        "base_url": "https://api.groq.com/openai/v1",
+        "price":    [0.00059, 0.00079],
+    }],
     "temperature": 0,
     "timeout": 120,
     "cache_seed": None,
