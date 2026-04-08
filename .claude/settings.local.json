@@ -3,7 +3,10 @@
     "allow": [
       "Bash(py -3.11 --version)",
       "Bash(python3.11 --version)",
-      "Bash(PGPASSWORD=root \"C:/Program Files/PostgreSQL/18/bin/createdb.exe\" -U postgres -p 5432 -h localhost -O aegis aegispm)"
+      "Bash(PGPASSWORD=root \"C:/Program Files/PostgreSQL/18/bin/createdb.exe\" -U postgres -p 5432 -h localhost -O aegis aegispm)",
+      "Bash(curl -s -o /dev/null -w \"API:    %{http_code}\\\\n\" http://127.0.0.1:8000/health)",
+      "Bash(curl -s -o /dev/null -w \"Web:    %{http_code}\\\\n\" http://localhost:3000/dashboard)",
+      "Bash(curl -s -o /dev/null -w \"HTML:   %{http_code}\\\\n\" http://127.0.0.1:5500/index.html)"
     ]
   }
 }

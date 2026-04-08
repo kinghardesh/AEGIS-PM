@@ -7,7 +7,8 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <style>
-#three-bg{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:0.3;}
+#three-bg{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:0.85;}
+body{background:radial-gradient(ellipse at center,#0B1020 0%,#050811 70%) !important;}
 .layout{position:relative;z-index:1;}
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{
@@ -456,68 +457,143 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 <div class="refresh-track"><div class="refresh-fill" id="refresh-fill"></div></div>
 
 <script>
-// ── THREE.JS SUBTLE BACKGROUND ──────────────────────────────────────
+// ── 3D AI AGENT NETWORK BACKGROUND ──────────────────────────────────
+// A living "neural network" of glowing nodes (agents/tasks) connected by
+// pulsing lines that drift, rotate, and react to the mouse. Designed to
+// visually communicate what Aegis PM does: AI agents coordinating work.
 (function(){
   const canvas = document.getElementById('three-bg');
   const renderer = new THREE.WebGLRenderer({canvas, alpha:true, antialias:true});
   renderer.setPixelRatio(Math.min(devicePixelRatio,2));
   renderer.setSize(innerWidth,innerHeight);
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 100);
-  camera.position.set(0,0,8);
+  const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 200);
+  camera.position.set(0, 0, 22);
 
-  // Soft floating spheres
-  const geo = new THREE.SphereGeometry(1,32,32);
-  const meshes = [
-    {pos:[6,3,-5], color:0xEEF2FF, s:2.5},
-    {pos:[-7,-2,-6], color:0xF0FDF4, s:3},
-    {pos:[3,-5,-4], color:0xFFFBEB, s:1.8},
-    {pos:[-4,5,-8], color:0xEEF2FF, s:4},
-  ].map(({pos,color,s})=>{
-    const mat = new THREE.MeshBasicMaterial({color, transparent:true, opacity:0.6});
-    const m = new THREE.Mesh(geo,mat);
-    m.scale.setScalar(s);
-    m.position.set(...pos);
+  // ── Build node cloud ─────────────────────────────────────────────
+  const NODE_COUNT = 140;
+  const RADIUS = 16;
+  const palette = [0x6366F1, 0x8B5CF6, 0x06B6D4, 0x22D3EE, 0x10B981, 0xF59E0B, 0xEC4899];
+  const nodes = [];
+  const nodeGeo = new THREE.IcosahedronGeometry(0.22, 1);
+  for (let i = 0; i < NODE_COUNT; i++) {
+    // Distribute on a sphere shell with random radius for depth
+    const phi   = Math.acos(2 * Math.random() - 1);
+    const theta = 2 * Math.PI * Math.random();
+    const r = RADIUS * (0.45 + Math.random() * 0.55);
+    const color = palette[i % palette.length];
+    const mat = new THREE.MeshBasicMaterial({color, transparent:true, opacity:1.0, blending:THREE.AdditiveBlending});
+    const m = new THREE.Mesh(nodeGeo, mat);
+    m.position.set(
+      r * Math.sin(phi) * Math.cos(theta),
+      r * Math.sin(phi) * Math.sin(theta),
+      r * Math.cos(phi)
+    );
+    // Multi-layer halo for bloom-like glow
+    const halo = new THREE.Mesh(
+      new THREE.SphereGeometry(0.7, 16, 16),
+      new THREE.MeshBasicMaterial({color, transparent:true, opacity:0.18, blending:THREE.AdditiveBlending})
+    );
+    halo.position.copy(m.position);
+    const halo2 = new THREE.Mesh(
+      new THREE.SphereGeometry(1.4, 16, 16),
+      new THREE.MeshBasicMaterial({color, transparent:true, opacity:0.05, blending:THREE.AdditiveBlending})
+    );
+    halo2.position.copy(m.position);
     scene.add(m);
-    return m;
-  });
-
-  // Subtle grid
-  const gridGeo = new THREE.BufferGeometry();
-  const lines = [];
-  for(let i=-10;i<=10;i++){
-    lines.push(-10,0,i, 10,0,i);
-    lines.push(i,0,-10, i,0,10);
+    scene.add(halo);
+    scene.add(halo2);
+    nodes.push({mesh:m, halo, halo2, color, phase: Math.random()*Math.PI*2, base: m.position.clone()});
   }
-  gridGeo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(lines),3));
-  const gridMat = new THREE.LineBasicMaterial({color:0xE8E8E4,transparent:true,opacity:0.4});
-  const grid = new THREE.LineSegments(gridGeo,gridMat);
-  grid.position.y = -4;
-  scene.add(grid);
 
-  let mx=0,my=0;
-  document.addEventListener('mousemove',e=>{
-    mx=(e.clientX/innerWidth-0.5)*0.3;
-    my=(e.clientY/innerHeight-0.5)*0.2;
+  // ── Build connection lines (only between nearby nodes) ───────────
+  const lineSegs = [];
+  const colors   = [];
+  const MAX_DIST = 5.5;
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const d = nodes[i].mesh.position.distanceTo(nodes[j].mesh.position);
+      if (d < MAX_DIST) {
+        lineSegs.push(
+          nodes[i].mesh.position.x, nodes[i].mesh.position.y, nodes[i].mesh.position.z,
+          nodes[j].mesh.position.x, nodes[j].mesh.position.y, nodes[j].mesh.position.z
+        );
+        const c1 = new THREE.Color(nodes[i].color);
+        const c2 = new THREE.Color(nodes[j].color);
+        colors.push(c1.r, c1.g, c1.b, c2.r, c2.g, c2.b);
+      }
+    }
+  }
+  const lineGeo = new THREE.BufferGeometry();
+  lineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(lineSegs), 3));
+  lineGeo.setAttribute('color',    new THREE.BufferAttribute(new Float32Array(colors), 3));
+  const lineMat = new THREE.LineBasicMaterial({vertexColors:true, transparent:true, opacity:0.55, blending:THREE.AdditiveBlending});
+  const lines = new THREE.LineSegments(lineGeo, lineMat);
+  scene.add(lines);
+
+  // ── Particle dust field for depth ────────────────────────────────
+  const DUST = 1800;
+  const dustPos = new Float32Array(DUST * 3);
+  for (let i = 0; i < DUST; i++) {
+    dustPos[i*3]   = (Math.random() - 0.5) * 80;
+    dustPos[i*3+1] = (Math.random() - 0.5) * 80;
+    dustPos[i*3+2] = (Math.random() - 0.5) * 80;
+  }
+  const dustGeo = new THREE.BufferGeometry();
+  dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+  const dustMat = new THREE.PointsMaterial({color:0xC7D2FE, size:0.07, transparent:true, opacity:0.85, blending:THREE.AdditiveBlending});
+  const dust = new THREE.Points(dustGeo, dustMat);
+  scene.add(dust);
+
+  // ── Group everything so we can rotate as one ─────────────────────
+  const group = new THREE.Group();
+  scene.children.slice().forEach(c => { if (c !== camera) { scene.remove(c); group.add(c); }});
+  scene.add(group);
+
+  // ── Mouse parallax ───────────────────────────────────────────────
+  let mx = 0, my = 0;
+  document.addEventListener('mousemove', e => {
+    mx = (e.clientX / innerWidth  - 0.5);
+    my = (e.clientY / innerHeight - 0.5);
   });
 
-  let t=0;
+  // ── Animate ──────────────────────────────────────────────────────
+  let t = 0;
   (function animate(){
     requestAnimationFrame(animate);
-    t+=0.005;
-    meshes.forEach((m,i)=>{
-      m.position.y += Math.sin(t+i)*0.003;
+    t += 0.006;
+    // Slow, hypnotic auto-rotation
+    group.rotation.y += 0.0018;
+    group.rotation.x += 0.0007;
+    // Mouse parallax adds tilt
+    group.rotation.y += (mx * 0.5 - group.rotation.y * 0.0) * 0.0;
+    camera.position.x += (mx * 4 - camera.position.x) * 0.04;
+    camera.position.y += (-my * 4 - camera.position.y) * 0.04;
+    camera.lookAt(0, 0, 0);
+
+    // Pulse nodes
+    nodes.forEach((n, i) => {
+      const pulse = 0.85 + Math.sin(t * 2 + n.phase) * 0.35;
+      n.mesh.scale.setScalar(pulse);
+      n.halo.scale.setScalar(pulse * 1.5);
+      n.halo2.scale.setScalar(pulse * 2.4);
+      n.halo.material.opacity  = 0.15 + Math.sin(t * 2 + n.phase) * 0.08;
+      n.halo2.material.opacity = 0.04 + Math.sin(t * 2 + n.phase) * 0.04;
     });
-    camera.position.x += (mx - camera.position.x)*0.03;
-    camera.position.y += (-my - camera.position.y)*0.03;
-    camera.lookAt(0,0,0);
-    renderer.render(scene,camera);
+
+    // Subtle line opacity breathing
+    lineMat.opacity = 0.28 + Math.sin(t * 1.5) * 0.08;
+
+    // Drift dust field
+    dust.rotation.y += 0.0004;
+
+    renderer.render(scene, camera);
   })();
 
-  window.addEventListener('resize',()=>{
-    camera.aspect=innerWidth/innerHeight;
+  window.addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
-    renderer.setSize(innerWidth,innerHeight);
+    renderer.setSize(innerWidth, innerHeight);
   });
 })();
 

@@ -170,6 +170,8 @@ async def require_agent_key(
 
     Skipped entirely when AEGIS_ENFORCE_AUTH is not 'true'.
     """
+    if os.getenv("AEGIS_ENFORCE_AUTH", "false").lower() != "true":
+        return "unauthenticated"   # dev mode
     if _AGENT_KEY_HASH is None:
         return "unauthenticated"   # dev mode
 
@@ -201,6 +203,8 @@ async def require_admin_key(
 
     Skipped entirely when AEGIS_ENFORCE_AUTH is not 'true'.
     """
+    if os.getenv("AEGIS_ENFORCE_AUTH", "false").lower() != "true":
+        return "unauthenticated"   # dev mode
     if _ADMIN_KEY_HASH is None:
         return "unauthenticated"   # dev mode
 

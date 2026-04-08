@@ -244,7 +244,7 @@ tr:hover td{background:#FAFBFF;}
 <div class="modal-overlay" id="project-modal">
   <div class="modal">
     <div class="modal-header">
-      <h3 class="modal-title">Create Project from PRD</h3>
+      <h3 class="modal-title" id="proj-modal-title">Create Project from PRD</h3>
       <div class="close-btn" onclick="closeModals()">✕</div>
     </div>
     <div class="form-group">
@@ -259,7 +259,17 @@ tr:hover td{background:#FAFBFF;}
       <label class="form-label">Paste PRD (Product Requirements Document)</label>
       <textarea class="form-textarea" id="p-prd" placeholder="Paste your markdown or text PRD here..."></textarea>
     </div>
-    <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:10px" onclick="createProject()">Create Project</button>
+    <button class="btn btn-primary" id="btn-save-project" style="width:100%;justify-content:center;margin-top:10px" onclick="createProject()">Create Project</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="task-detail-modal">
+  <div class="modal" style="width:640px;">
+    <div class="modal-header">
+      <h3 class="modal-title" id="td-title">Task details</h3>
+      <div class="close-btn" onclick="closeModals()">✕</div>
+    </div>
+    <div id="td-body" style="font-size:13px;line-height:1.6;color:var(--text);white-space:pre-wrap;"></div>
   </div>
 </div>
 
@@ -272,6 +282,10 @@ tr:hover td{background:#FAFBFF;}
     <div class="form-group">
       <label class="form-label">Name</label>
       <input type="text" class="form-input" id="e-name" placeholder="Jane Doe">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Email <span style="color:var(--text3);font-weight:400;font-size:11px;">(used to notify when assigned a task)</span></label>
+      <input type="email" class="form-input" id="e-email" placeholder="jane@company.com">
     </div>
     <div class="form-group">
       <label class="form-label">Role</label>
@@ -340,7 +354,30 @@ function switchTab(tab, el) {
   if(tab==='employees') loadEmployees();
 }
 
-function openProjectModal(){ document.getElementById('project-modal').classList.add('open'); }
+let editingProjectId = null;
+function openProjectModal(){
+  editingProjectId = null;
+  document.getElementById('proj-modal-title').textContent = 'Create Project from PRD';
+  document.getElementById('btn-save-project').textContent = 'Create Project';
+  ['p-name','p-desc','p-prd'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('project-modal').classList.add('open');
+}
+function openEditProjectModal(p){
+  editingProjectId = p.id;
+  document.getElementById('proj-modal-title').textContent = 'Edit Project';
+  document.getElementById('btn-save-project').textContent = 'Save Changes';
+  document.getElementById('p-name').value = p.name || '';
+  document.getElementById('p-desc').value = p.description || '';
+  document.getElementById('p-prd').value  = p.prd_text || '';
+  document.getElementById('project-modal').classList.add('open');
+}
+async function deleteProject(id, name){
+  if(!confirm(`Delete project "${name}" and ALL its tasks? This cannot be undone.`)) return;
+  const r = await fetch(API+'/projects/'+id, {method:'DELETE'});
+  if(!r.ok){ showToast('Delete failed','error'); return; }
+  showToast('Project deleted','success');
+  loadProjects();
+}
 function closeModals(){ document.querySelectorAll('.modal-overlay').forEach(m=>m.classList.remove('open')); }
 
 /* ── EMPLOYEE MODAL (create + edit) ─────────────────────────── */
@@ -348,6 +385,7 @@ function openEmployeeModal(emp=null) {
   editingEmployeeId = emp ? emp.id : null;
   document.getElementById('emp-modal-title').textContent = emp ? 'Edit Team Member' : 'Add Team Member';
   document.getElementById('e-name').value        = emp ? emp.name : '';
+  document.getElementById('e-email').value       = emp ? (emp.email||'') : '';
   document.getElementById('e-role').value        = emp ? (emp.role||'') : '';
   document.getElementById('e-skills').value      = emp ? (emp.skills_list||[]).join(', ') : '';
   document.getElementById('e-availability').value= emp ? (emp.availability||'available') : 'available';
@@ -357,14 +395,17 @@ function openEmployeeModal(emp=null) {
 
 async function saveEmployee() {
   const name         = document.getElementById('e-name').value.trim();
+  const email        = document.getElementById('e-email').value.trim();
   const role         = document.getElementById('e-role').value.trim();
   const skillsStr    = document.getElementById('e-skills').value;
   const availability = document.getElementById('e-availability').value;
   const skills       = skillsStr.split(',').map(s=>s.trim()).filter(Boolean);
 
   if(!name){ showToast('Name is required','error'); return; }
+  if(!email){ showToast('Email is required so we can notify them when assigned a task','error'); return; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ showToast('Please enter a valid email address','error'); return; }
 
-  const body = JSON.stringify({name, role, skills, availability});
+  const body = JSON.stringify({name, email, role, skills, availability});
 
   if(editingEmployeeId) {
     await fetch(API+'/employees/'+editingEmployeeId, {
@@ -444,7 +485,11 @@ async function loadProjects() {
         <span style="font-size:11px;color:var(--text3)">${p.progress}%</span>
       </td>
       <td>${p.total_tasks} total</td>
-      <td><button class="btn btn-secondary" onclick="event.stopPropagation();viewProject(${p.id})">Manage</button></td>
+      <td onclick="event.stopPropagation()" style="white-space:nowrap;">
+        <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px;margin-right:4px" onclick="viewProject(${p.id})">Manage</button>
+        <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px;margin-right:4px" onclick='openEditProjectModal(${JSON.stringify(p).replace(/'/g,"&apos;")})'>Edit</button>
+        <button class="btn" style="padding:4px 10px;font-size:12px;background:#FEE2E2;color:#DC2626;border:1px solid #FCA5A5" onclick="deleteProject(${p.id},'${(p.name||'').replace(/'/g,"\\'")}')">Delete</button>
+      </td>
     </tr>
   `).join('');
 }
@@ -454,13 +499,18 @@ async function createProject() {
   const desc = document.getElementById('p-desc').value.trim();
   const prd  = document.getElementById('p-prd').value.trim();
   if(!name){ showToast('Project name required','error'); return; }
-  await fetch(API+'/projects', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({name, description:desc, prd_text:prd})
-  });
+  const body = JSON.stringify({name, description:desc, prd_text:prd});
+  if(editingProjectId){
+    const r = await fetch(API+'/projects/'+editingProjectId, {method:'PUT', headers:{'Content-Type':'application/json'}, body});
+    if(!r.ok){ showToast('Update failed','error'); return; }
+    showToast('Project updated','success');
+  } else {
+    await fetch(API+'/projects', {method:'POST', headers:{'Content-Type':'application/json'}, body});
+    showToast('Project created!','success');
+  }
   closeModals();
+  editingProjectId = null;
   ['p-name','p-desc','p-prd'].forEach(id=>document.getElementById(id).value='');
-  showToast('Project created!','success');
   loadProjects();
 }
 
@@ -489,6 +539,38 @@ async function viewProject(id) {
   renderTasks(p.tasks||[]);
 }
 
+function _renderTaskBody(t, descText) {
+  const assignee = t.assigned_name ? `Assigned to: ${t.assigned_name}` : 'Unassigned';
+  const skills = (t.required_skills_list || []).join(', ') || '—';
+  const safe = (descText || '').replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\n/g,'<br>');
+  return `<div style="margin-bottom:12px;color:var(--text3);font-size:12px;">${assignee} · Priority: ${t.priority} · ${t.estimated_hours}h · Skills: ${skills}</div>` + safe;
+}
+
+async function showTaskDetail(t) {
+  document.getElementById('td-title').textContent = t.title || 'Task';
+  const body = document.getElementById('td-body');
+  document.getElementById('task-detail-modal').classList.add('open');
+
+  const isWeak = !t.description || t.description.length < 80 || /derived from PRD/i.test(t.description);
+  if (!isWeak) {
+    body.innerHTML = _renderTaskBody(t, t.description);
+    return;
+  }
+
+  body.innerHTML = _renderTaskBody(t, '⏳ Generating developer instructions with AI…');
+  try {
+    const r = await fetch(API + '/tasks/' + t.id + '/generate-instructions', {method: 'POST'});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    t.description = data.description;
+    body.innerHTML = _renderTaskBody(t, data.description);
+  } catch (e) {
+    body.innerHTML = _renderTaskBody(t, '⚠️ Could not generate instructions: ' + e.message);
+  }
+}
+
 function renderTasks(tasks) {
   const tb      = document.querySelector('#tasks-table tbody');
   const dSkills = (s) => (s||[]).map(x=>`<span class="badge">${x}</span>`).join(' ');
@@ -500,10 +582,12 @@ function renderTasks(tasks) {
   tb.innerHTML = tasks.map(t=>`
     <tr>
       <td>
-        <strong>${t.title}</strong>
+        <strong style="cursor:pointer;color:var(--blue,#2563EB);text-decoration:underline dotted;" onclick='showTaskDetail(${JSON.stringify(t).replace(/'/g,"&apos;")})'>${t.title}</strong>
         ${t.status==='paused'?'<span style="font-size:10px;background:#FEF3C7;color:#D97706;padding:2px 6px;border-radius:4px;margin-left:6px;font-weight:600;">⏸ PAUSED</span>':''}
         <br>
         <span style="font-size:11px;color:var(--text3)">${(t.description||'').substring(0,70)}${t.description&&t.description.length>70?'…':''}</span>
+        <br>
+        <a href="#" style="font-size:11px;color:#2563EB;" onclick='event.preventDefault();showTaskDetail(${JSON.stringify(t).replace(/'/g,"&apos;")})'>📖 View instructions</a>
       </td>
       <td><span class="badge ${t.priority==='high'?'blue':t.priority==='low'?'':'green'}">${t.priority}</span></td>
       <td>${t.estimated_hours}h</td>

@@ -57,9 +57,10 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
 )
 from dotenv import load_dotenv
-from api.security import require_agent_key, require_admin_key, rate_limit, inject_request_id
 
 load_dotenv()
+
+from api.security import require_agent_key, require_admin_key, rate_limit, inject_request_id
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -651,13 +652,40 @@ async def approve_alert(
 
     Returns 400 if the alert is not currently `pending`.
     """
-    return await _transition(
+    result = await _transition(
         alert_id=alert_id,
         to_status="approved",
         db=db,
         actor=body.actor,
         notes=body.notes,
     )
+    # Side effect: move the linked internal task to "in_progress" so it shows
+    # up on the team's active list. The alert task_key looks like "TASK-103";
+    # the trailing number is the internal task id for alerts created via
+    # /alerts/generate-from-tasks.
+    try:
+        alert_row = (
+            await db.execute(sa.select(alerts_table).where(alerts_table.c.id == alert_id))
+        ).mappings().first()
+        if alert_row and alert_row["task_key"]:
+            import re
+            m = re.search(r"(\d+)$", alert_row["task_key"])
+            if m:
+                task_id = int(m.group(1))
+                task_row = (
+                    await db.execute(sa.select(tasks_table).where(tasks_table.c.id == task_id))
+                ).mappings().first()
+                if task_row and task_row["status"] != "in_progress":
+                    await db.execute(
+                        tasks_table.update()
+                        .where(tasks_table.c.id == task_id)
+                        .values(status="in_progress")
+                    )
+                    await db.commit()
+                    log.info("Alert %d approval moved task %d to in_progress", alert_id, task_id)
+    except Exception as e:
+        log.warning("Could not auto-progress task for alert %d: %s", alert_id, e)
+    return result
 
 
 @app.post(
@@ -1194,6 +1222,43 @@ class ProjectCreate(BaseModel):
     prd_text:    Optional[str] = None
 
 
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    prd_text: Optional[str] = None
+    status: Optional[str] = None
+
+
+@app.put("/projects/{project_id}", summary="Update a project", tags=["Projects"])
+async def update_project(project_id: int, payload: ProjectUpdate, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(sa.select(projects_table).where(projects_table.c.id == project_id))
+    if not result.mappings().first():
+        raise HTTPException(404, f"Project {project_id} not found")
+    values = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if not values:
+        raise HTTPException(400, "No fields to update")
+    values["updated_at"] = datetime.utcnow()
+    await db.execute(projects_table.update().where(projects_table.c.id == project_id).values(**values))
+    await db.commit()
+    updated = (await db.execute(sa.select(projects_table).where(projects_table.c.id == project_id))).mappings().first()
+    log.info("Project %d updated: %s", project_id, list(values.keys()))
+    return dict(updated)
+
+
+@app.delete("/projects/{project_id}", summary="Delete a project and all its tasks", tags=["Projects"])
+async def delete_project(project_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(sa.select(projects_table).where(projects_table.c.id == project_id))
+    project = result.mappings().first()
+    if not project:
+        raise HTTPException(404, f"Project {project_id} not found")
+    # Delete child tasks first to satisfy any FK constraints
+    await db.execute(tasks_table.delete().where(tasks_table.c.project_id == project_id))
+    await db.execute(projects_table.delete().where(projects_table.c.id == project_id))
+    await db.commit()
+    log.info("Project %d (%s) deleted along with its tasks", project_id, project["name"])
+    return {"deleted": True, "project_id": project_id}
+
+
 @app.post("/projects", status_code=201, summary="Create project", tags=["Projects"])
 async def create_project(payload: ProjectCreate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
@@ -1223,7 +1288,12 @@ async def list_projects(db: AsyncSession = Depends(get_db)):
         d["task_stats"] = status_counts
         d["total_tasks"] = sum(status_counts.values())
         d["completed_tasks"] = status_counts.get("done", 0)
-        d["progress"] = round(d["completed_tasks"] / max(d["total_tasks"], 1) * 100, 1)
+        in_progress = status_counts.get("in_progress", 0)
+        # Progress: done = 100%, in_progress = 50% credit, todo/paused = 0%.
+        d["progress"] = round(
+            (d["completed_tasks"] + in_progress * 0.5) / max(d["total_tasks"], 1) * 100,
+            1,
+        )
         projects.append(d)
     return projects
 
@@ -1289,11 +1359,14 @@ async def parse_prd(project_id: int, db: AsyncSession = Depends(get_db)):
         log.warning("No valid OpenAI key — using rule-based task extraction")
         tasks = _fallback_parse_prd(project["prd_text"])
     else:
-        prompt = f"""You are a project management AI. Analyze this Product Requirements Document (PRD) and break it down into actionable development tasks.
+        prompt = f"""You are a senior tech lead AI. Analyze this Product Requirements Document (PRD) and break it down into actionable development tasks. For each task, write it as if you are briefing a developer who has never seen this project — explain WHAT to build and HOW to approach it.
 
 For each task, provide:
 - title: Clear, concise task title
-- description: Detailed description of what needs to be done
+- description: 2-3 sentence summary of what this task is about and why it matters
+- implementation_steps: Array of 3-6 concrete step-by-step instructions a developer should follow to solve this task (e.g. "Create a new endpoint POST /foo", "Add a migration for the bar table", "Write unit tests covering X")
+- acceptance_criteria: Array of 2-4 testable conditions that must be true for this task to be considered done
+- tech_hints: Short string suggesting libraries, patterns, or files the developer should look at
 - priority: "high", "medium", or "low"
 - estimated_hours: Estimated hours to complete (number)
 - required_skills: Array of skill tags needed (e.g. ["python", "react", "devops", "ml", "backend", "frontend", "testing", "database", "api", "ui/ux"])
@@ -1331,11 +1404,25 @@ PRD:
     # Insert tasks into DB
     created_tasks = []
     for t in tasks:
+        # Build a rich, developer-facing description: summary + steps + acceptance criteria + hints
+        parts = []
+        if t.get("description"):
+            parts.append(t["description"].strip())
+        steps = t.get("implementation_steps") or []
+        if steps:
+            parts.append("**How to solve this:**\n" + "\n".join(f"{i+1}. {s}" for i, s in enumerate(steps)))
+        criteria = t.get("acceptance_criteria") or []
+        if criteria:
+            parts.append("**Acceptance criteria:**\n" + "\n".join(f"- {c}" for c in criteria))
+        if t.get("tech_hints"):
+            parts.append(f"**Tech hints:** {t['tech_hints']}")
+        rich_description = "\n\n".join(parts) if parts else t.get("description", "")
+
         ins = await db.execute(
             tasks_table.insert().values(
                 project_id=project_id,
                 title=t.get("title", "Untitled Task"),
-                description=t.get("description", ""),
+                description=rich_description,
                 priority=t.get("priority", "medium"),
                 estimated_hours=t.get("estimated_hours", 4),
                 required_skills=json.dumps(t.get("required_skills", [])),
@@ -1411,6 +1498,18 @@ def _fallback_parse_prd(prd_text: str) -> list:
 #  Routes – AI Task Assignment
 # ══════════════════════════════════════════════════════════════════════════════
 
+@app.post("/projects/{project_id}/unassign-all", summary="Clear assignees on all tasks in a project", tags=["AI"])  # touch
+async def unassign_all(project_id: int, db: AsyncSession = Depends(get_db)):
+    res = await db.execute(
+        tasks_table.update()
+        .where(tasks_table.c.project_id == project_id)
+        .values(assigned_to=None, assigned_name=None, ai_confidence=None)
+    )
+    await db.commit()
+    log.info("Unassigned all tasks in project %d (%d rows)", project_id, res.rowcount or 0)
+    return {"project_id": project_id, "unassigned": res.rowcount or 0}
+
+
 @app.post("/projects/{project_id}/assign-all", summary="AI assign all unassigned tasks", tags=["AI"])
 async def ai_assign_all(project_id: int, db: AsyncSession = Depends(get_db)):
     """
@@ -1446,33 +1545,43 @@ async def ai_assign_all(project_id: int, db: AsyncSession = Depends(get_db)):
     if not employees:
         raise HTTPException(400, "No available employees. Add employees first.")
 
+    # Recompute true current_load from real DB task counts so stale values
+    # in the employees table don't bias the assigner toward one person.
+    load_rows = await db.execute(
+        sa.select(tasks_table.c.assigned_to, sa.func.count().label("c"))
+        .where(tasks_table.c.assigned_to.is_not(None))
+        .where(tasks_table.c.status.in_(("todo", "in_progress")))
+        .group_by(tasks_table.c.assigned_to)
+    )
+    real_loads = {row.assigned_to: row.c for row in load_rows}
+    for emp in employees:
+        emp["current_load"] = real_loads.get(emp["id"], 0)
+
     assignments = []
     for task in unassigned:
         try:
             task_skills = json.loads(task["required_skills"]) if task["required_skills"] else []
-        except:
+        except Exception:
             task_skills = []
 
-        # Score each employee
-        best_emp = None
-        best_score = -1
+        # Score each employee. Skill 0.5 / load 0.5 — load matters as much as
+        # skill so we never dump everything on one person when skills tie.
+        scored = []
         for emp in employees:
             emp_skills = emp["skills_list"]
-            # Skill overlap score (0–1)
             if task_skills:
                 overlap = len(set(s.lower() for s in task_skills) & set(s.lower() for s in emp_skills))
                 skill_score = overlap / len(task_skills)
             else:
                 skill_score = 0.5
+            load_score = max(0.0, 1.0 - (emp["current_load"] * 0.2))
+            score = (skill_score * 0.5) + (load_score * 0.5)
+            scored.append((score, emp["current_load"], emp))
 
-            # Workload penalty (fewer tasks = better)
-            load_score = max(0, 1 - (emp["current_load"] * 0.15))
-
-            # Combined score
-            score = (skill_score * 0.7) + (load_score * 0.3)
-            if score > best_score:
-                best_score = score
-                best_emp = emp
+        # Sort by score desc, then by lowest current load (round-robin tie break),
+        # then by employee id for deterministic ordering.
+        scored.sort(key=lambda x: (-x[0], x[1], x[2]["id"]))
+        best_score, _, best_emp = scored[0]
 
         if best_emp:
             confidence = round(best_score * 100, 1)
@@ -1492,13 +1601,26 @@ async def ai_assign_all(project_id: int, db: AsyncSession = Depends(get_db)):
                 "task_title": task["title"],
                 "assigned_to": best_emp["name"],
                 "employee_id": best_emp["id"],
+                "employee_email": best_emp.get("email"),
                 "confidence": confidence,
                 "matched_skills": list(set(s.lower() for s in (json.loads(task["required_skills"]) if task["required_skills"] else [])) & set(s.lower() for s in best_emp["skills_list"])),
             })
 
     await db.commit()
-    log.info("AI assigned %d tasks in project %d", len(assignments), project_id)
-    return {"project_id": project_id, "assignments": assignments, "total_assigned": len(assignments)}
+
+    # Send notification emails (best-effort) — runs after commit so DB is consistent
+    proj_row = (await db.execute(sa.select(projects_table).where(projects_table.c.id == project_id))).mappings().first()
+    project_name = proj_row["name"] if proj_row else ""
+    emails_sent = 0
+    for a in assignments:
+        if not a.get("employee_email"):
+            continue
+        task_row = (await db.execute(sa.select(tasks_table).where(tasks_table.c.id == a["task_id"]))).mappings().first()
+        if task_row and await send_assignment_email(a["employee_email"], a["assigned_to"], dict(task_row), project_name):
+            emails_sent += 1
+
+    log.info("AI assigned %d tasks in project %d (%d emails sent)", len(assignments), project_id, emails_sent)
+    return {"project_id": project_id, "assignments": assignments, "total_assigned": len(assignments), "emails_sent": emails_sent}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1570,6 +1692,47 @@ class TaskAssignBody(BaseModel):
     employee_name: str
 
 
+async def send_assignment_email(to_email: str, to_name: str, task: dict, project_name: str = "") -> bool:
+    """Send a 'you've been assigned a task' email via Resend. Returns True on success."""
+    import httpx
+    api_key = os.environ.get("RESEND_API_KEY", "").strip()
+    from_email = os.environ.get("RESEND_FROM_EMAIL", "onboarding@resend.dev").strip()
+    if not api_key or not to_email:
+        return False
+    desc_html = (task.get("description") or "").replace("\n", "<br>").replace("**", "")
+    subject = f"[Aegis PM] You've been assigned: {task['title']}"
+    html = f"""
+    <div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;max-width:640px;margin:0 auto;color:#0f172a;">
+      <h2 style="color:#2563eb;">Hi {to_name}, you have a new task</h2>
+      <p>You've been assigned the following task{f' in <strong>{project_name}</strong>' if project_name else ''}:</p>
+      <div style="border:1px solid #e2e8f0;border-radius:10px;padding:18px;background:#f8fafc;">
+        <h3 style="margin:0 0 6px 0;">{task['title']}</h3>
+        <div style="color:#64748b;font-size:13px;margin-bottom:14px;">
+          Priority: <strong>{task.get('priority','medium')}</strong> ·
+          Estimated: <strong>{task.get('estimated_hours','?')}h</strong>
+        </div>
+        <div style="font-size:14px;line-height:1.6;">{desc_html or '(No instructions yet — open the dashboard to generate them.)'}</div>
+      </div>
+      <p style="margin-top:18px;font-size:13px;color:#64748b;">— Aegis PM</p>
+    </div>
+    """
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={"from": from_email, "to": [to_email], "subject": subject, "html": html},
+            )
+        if r.status_code >= 300:
+            log.error("Resend error %s: %s", r.status_code, r.text[:300])
+            return False
+        log.info("Sent assignment email to %s for task %s", to_email, task.get("id"))
+        return True
+    except Exception as e:
+        log.error("Resend exception: %s", e)
+        return False
+
+
 @app.post("/tasks/{task_id}/assign", summary="Manually assign a task to an employee", tags=["Tasks"])
 async def assign_task(task_id: int, body: TaskAssignBody, db: AsyncSession = Depends(get_db)):
     result = await db.execute(sa.select(tasks_table).where(tasks_table.c.id == task_id))
@@ -1589,9 +1752,20 @@ async def assign_task(task_id: int, body: TaskAssignBody, db: AsyncSession = Dep
     )
     await db.commit()
 
-    updated = await db.execute(sa.select(tasks_table).where(tasks_table.c.id == task_id))
-    log.info("Task %d manually assigned to employee %d (%s)", task_id, body.employee_id, body.employee_name)
-    return dict(updated.mappings().first())
+    updated_row = (await db.execute(sa.select(tasks_table).where(tasks_table.c.id == task_id))).mappings().first()
+    updated = dict(updated_row)
+
+    # Send email notification to the assignee (best-effort, non-blocking on failure)
+    proj_row = (await db.execute(sa.select(projects_table).where(projects_table.c.id == updated["project_id"]))).mappings().first()
+    project_name = proj_row["name"] if proj_row else ""
+    email_sent = False
+    if employee.get("email"):
+        email_sent = await send_assignment_email(employee["email"], employee["name"], updated, project_name)
+
+    log.info("Task %d manually assigned to employee %d (%s) email_sent=%s",
+             task_id, body.employee_id, body.employee_name, email_sent)
+    updated["email_sent"] = email_sent
+    return updated
 
 
 @app.post("/tasks/{task_id}/pause", summary="Pause a task", tags=["Tasks"])
@@ -1622,6 +1796,176 @@ async def resume_task(task_id: int, db: AsyncSession = Depends(get_db)):
     updated = await db.execute(sa.select(tasks_table).where(tasks_table.c.id == task_id))
     log.info("Task %d resumed", task_id)
     return dict(updated.mappings().first())
+
+
+@app.post("/tasks/{task_id}/generate-instructions", summary="AI-generate developer instructions for a task", tags=["AI"])
+async def generate_task_instructions(task_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Use Groq (LLaMA) to generate developer-facing implementation instructions
+    for a single existing task, using its title + the parent project's PRD as context.
+    Saves the result into the task's `description` field and returns it.
+    """
+    import json, httpx
+    result = await db.execute(sa.select(tasks_table).where(tasks_table.c.id == task_id))
+    task = result.mappings().first()
+    if not task:
+        raise HTTPException(404, f"Task {task_id} not found")
+
+    proj_result = await db.execute(sa.select(projects_table).where(projects_table.c.id == task["project_id"]))
+    project = proj_result.mappings().first()
+    prd_snippet = (project["prd_text"] or "")[:3500] if project else ""
+
+    groq_key = os.environ.get("GROQ_API_KEY", "").strip()
+    data = None
+    llm_error = None
+
+    prompt = f"""You are a senior tech lead briefing a developer who is new to this project.
+Given the project context and the specific task below, write clear developer instructions.
+
+Project PRD context:
+{prd_snippet}
+
+Task title: {task["title"]}
+Required skills: {task["required_skills"] or "[]"}
+Estimated hours: {task["estimated_hours"]}
+
+Return ONLY valid JSON (no markdown fences) with this shape:
+{{
+  "summary": "2-3 sentence explanation of WHAT this task is and WHY it matters in the project",
+  "implementation_steps": ["step 1", "step 2", "step 3", "step 4"],
+  "acceptance_criteria": ["testable condition 1", "testable condition 2"],
+  "tech_hints": "short string of libraries/files/patterns the developer should look at"
+}}"""
+
+    if groq_key:
+        try:
+            async with httpx.AsyncClient(timeout=60) as client:
+                resp = await client.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+                    json={
+                        "model": "llama-3.3-70b-versatile",
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0.3,
+                        "max_tokens": 1200,
+                        "response_format": {"type": "json_object"},
+                    },
+                )
+            if resp.status_code == 200:
+                content = resp.json()["choices"][0]["message"]["content"]
+                data = json.loads(content)
+            else:
+                llm_error = f"Groq {resp.status_code}"
+                log.warning("Groq unavailable, using template fallback: %s", resp.text[:200])
+        except Exception as e:
+            llm_error = str(e)
+            log.warning("Groq call failed, using template fallback: %s", e)
+
+    if data is None:
+        # Template fallback — produces sensible dev instructions without an LLM
+        try:
+            skills = json.loads(task["required_skills"]) if task["required_skills"] else []
+        except Exception:
+            skills = []
+        title = task["title"]
+        project_name = project["name"] if project else "the project"
+        title_lc = title.lower()
+
+        # Pick step templates by detected category
+        categories = []
+        if any(k in title_lc for k in ["api", "endpoint", "route"]): categories.append("api")
+        if any(k in title_lc for k in ["ui", "dashboard", "page", "frontend", "screen"]): categories.append("frontend")
+        if any(k in title_lc for k in ["database", "schema", "migration", "model"]): categories.append("database")
+        if any(k in title_lc for k in ["test", "qa", "coverage"]): categories.append("testing")
+        if any(k in title_lc for k in ["deploy", "ci", "docker", "pipeline"]): categories.append("devops")
+        if any(k in title_lc for k in ["security", "auth", "encrypt", "token"]): categories.append("security")
+        if any(k in title_lc for k in ["monitor", "metric", "log", "observ"]): categories.append("monitoring")
+        if not categories: categories = ["generic"]
+
+        step_templates = {
+            "api":        ["Define the request/response schema (Pydantic models or DTOs)",
+                           f"Implement the endpoint logic for '{title}' in the appropriate router/service",
+                           "Wire up authentication and input validation",
+                           "Add unit + integration tests covering happy path and edge cases",
+                           "Update the OpenAPI/Swagger docs"],
+            "frontend":   [f"Sketch the layout for '{title}' (wireframe or Figma)",
+                           "Build the component(s) and hook them up to the API",
+                           "Handle loading, empty, and error states",
+                           "Make it responsive and accessible (keyboard + ARIA)",
+                           "Write a smoke test or visual snapshot"],
+            "database":   [f"Design the schema changes needed for '{title}'",
+                           "Write a migration script (Alembic / Prisma / SQL)",
+                           "Update the ORM models and any affected queries",
+                           "Backfill or seed data if required",
+                           "Test the migration on a dev DB before merging"],
+            "testing":    [f"Identify the critical paths for '{title}'",
+                           "Write unit tests for pure logic and integration tests for I/O",
+                           "Add fixtures or factories for reusable test data",
+                           "Wire the suite into CI and ensure it runs on every PR"],
+            "devops":     [f"Define what '{title}' must produce (artifact, container, deployment)",
+                           "Write the pipeline / Dockerfile / IaC config",
+                           "Set up secrets and environment variables securely",
+                           "Add health checks and rollback strategy",
+                           "Document how to run/redeploy locally"],
+            "security":   [f"Threat-model '{title}' — list assets, attackers, and risks",
+                           "Choose proven libraries (don't roll your own crypto/auth)",
+                           "Implement with secure defaults and least privilege",
+                           "Add tests for auth bypass / injection attempts",
+                           "Get a peer review focused on the security boundary"],
+            "monitoring": [f"Decide which metrics/events represent '{title}' health",
+                           "Instrument the code (logs, metrics, traces)",
+                           "Build a dashboard and an alert with sensible thresholds",
+                           "Document the runbook for when the alert fires"],
+            "generic":    [f"Read the relevant section of the {project_name} PRD and clarify any open questions",
+                           f"Break '{title}' into 2–4 sub-steps and sketch the data flow",
+                           "Implement the smallest working version end-to-end",
+                           "Add tests and update documentation",
+                           "Open a PR and request review"],
+        }
+        steps = []
+        for c in categories:
+            for s in step_templates[c]:
+                if s not in steps:
+                    steps.append(s)
+        steps = steps[:6]
+
+        criteria = [
+            f"'{title}' works end-to-end in a local dev environment",
+            "All new code is covered by tests and CI is green",
+            "Code is reviewed and merged with no open blockers",
+        ]
+        if "security" in categories:
+            criteria.append("No secrets are committed and threat model is documented")
+
+        hint_bits = []
+        if skills: hint_bits.append("Skills: " + ", ".join(skills))
+        if "api" in categories: hint_bits.append("look at existing routers and the auth dependency")
+        if "frontend" in categories: hint_bits.append("reuse existing components and design tokens")
+        if "database" in categories: hint_bits.append("check the migrations folder for prior examples")
+
+        data = {
+            "summary": f"This task — '{title}' — is part of {project_name}. Deliver it so the rest of the team can build on top of it without rework.",
+            "implementation_steps": steps,
+            "acceptance_criteria": criteria,
+            "tech_hints": "; ".join(hint_bits) if hint_bits else "Follow existing project conventions.",
+        }
+
+    parts = []
+    if data.get("summary"): parts.append(data["summary"].strip())
+    steps = data.get("implementation_steps") or []
+    if steps:
+        parts.append("**How to solve this:**\n" + "\n".join(f"{i+1}. {s}" for i, s in enumerate(steps)))
+    criteria = data.get("acceptance_criteria") or []
+    if criteria:
+        parts.append("**Acceptance criteria:**\n" + "\n".join(f"- {c}" for c in criteria))
+    if data.get("tech_hints"):
+        parts.append(f"**Tech hints:** {data['tech_hints']}")
+    rich = "\n\n".join(parts)
+
+    await db.execute(tasks_table.update().where(tasks_table.c.id == task_id).values(description=rich))
+    await db.commit()
+    log.info("Generated instructions for task %d (%d chars)", task_id, len(rich))
+    return {"task_id": task_id, "description": rich}
 
 
 @app.delete("/tasks/{task_id}", summary="Delete a task", tags=["Tasks"])
