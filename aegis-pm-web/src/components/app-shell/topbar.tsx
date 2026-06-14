@@ -29,7 +29,7 @@ export function Topbar() {
   const isDark = mounted && (resolvedTheme ?? theme) === "dark";
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/80 px-6 backdrop-blur">
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border/50 bg-background/80 px-6 backdrop-blur">
       <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm">
         {crumbs.length === 0 && (
           <span className="text-muted-foreground">Home</span>

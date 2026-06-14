@@ -82,7 +82,7 @@ export function Sidebar() {
     <aside
       data-collapsed={collapsed}
       className={cn(
-        "group/sidebar fixed inset-y-0 left-0 z-40 flex flex-col border-r border-border bg-card transition-[width] duration-200 ease-out",
+        "group/sidebar fixed inset-y-0 left-0 z-40 flex flex-col border-r border-border/50 bg-card/85 backdrop-blur-md transition-[width] duration-200 ease-out",
         collapsed ? "w-[68px]" : "w-[240px]"
       )}
     >

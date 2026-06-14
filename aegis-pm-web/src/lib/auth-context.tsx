@@ -35,9 +35,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = React.useState(false);
 
   React.useEffect(() => {
-    setUser(getStoredUser());
-    setToken(getToken());
-    setReady(true);
+    const storedUser = getStoredUser();
+    const storedToken = getToken();
+
+    if (storedUser && storedToken) {
+      setUser(storedUser);
+      setToken(storedToken);
+      setReady(true);
+    } else {
+      // Silently auto-login as bootstrap admin
+      const doAutoLogin = async () => {
+        try {
+          const body = { user_id: "admin", password: "adminpassword123" };
+          const res = await fetch(`${BASE}/auth/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          if (res.ok) {
+            const data = (await res.json()) as LoginResponse;
+            saveSession(data);
+            setUser(data.user);
+            setToken(data.access_token);
+          }
+        } catch (err) {
+          console.error("Auto-login failed:", err);
+        } finally {
+          setReady(true);
+        }
+      };
+      doAutoLogin();
+    }
   }, []);
 
   const login = React.useCallback(
@@ -75,7 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearSession();
     setUser(null);
     setToken(null);
-    router.push("/login");
+    router.push("/");
   }, [router]);
 
   const value = React.useMemo<AuthContextValue>(

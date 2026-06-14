@@ -266,10 +266,14 @@ async def lifespan(app: FastAPI):
             if not existing.first():
                 await conn.execute(
                     sa.text(
-                        "INSERT INTO users (user_id, password_hash, role, full_name, is_active) "
-                        "VALUES (:u, :p, 'admin', 'Bootstrap Admin', TRUE)"
+                        "INSERT INTO users (user_id, email, password_hash, role, full_name, is_active) "
+                        "VALUES (:u, :e, :p, 'admin', 'Bootstrap Admin', TRUE)"
                     ),
-                    {"u": boot_user, "p": hash_password(boot_pw)},
+                    {
+                        "u": boot_user,
+                        "e": f"{boot_user}@bootstrap.aegis-pm.app",
+                        "p": hash_password(boot_pw)
+                    },
                 )
                 log.info("Bootstrap admin '%s' created", boot_user)
 

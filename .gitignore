@@ -8,6 +8,7 @@ dist/
 build/
 .venv/
 venv/
+venv311/
 env/
 .mypy_cache/
 .ruff_cache/

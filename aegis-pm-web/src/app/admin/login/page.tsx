@@ -7,6 +7,7 @@ import { ShieldCheck, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth-context";
+import { ThreeBg } from "@/components/ui/three-bg";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -36,8 +37,9 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="min-h-screen grid place-items-center bg-background px-4">
-      <div className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-sm">
+    <div className="dark relative min-h-screen grid place-items-center px-4 overflow-hidden text-foreground">
+      <ThreeBg />
+      <div className="w-full max-w-sm rounded-xl border border-border/40 bg-card/60 backdrop-blur-md p-6 shadow-2xl relative z-10">
         <div className="flex items-center gap-2 mb-6">
           <div className="grid size-8 place-items-center rounded-md bg-destructive text-destructive-foreground">
             <ShieldCheck className="size-4" />
