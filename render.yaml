@@ -1,0 +1,51 @@
+# Render Blueprint — Aegis PM API (FastAPI / ASGI)
+#
+# Deploy: connect this repo as a Render *Blueprint* (New + → Blueprint), or use
+# it as the source of truth for an existing service's Build/Start commands.
+#
+# This serves the FastAPI app at api.main:app with gunicorn + uvicorn workers
+# (ASGI — required; plain gunicorn sync workers cannot run FastAPI/websockets).
+# Migrations run on each deploy before the server starts.
+services:
+  - type: web
+    name: aegis-pm-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # alembic upgrade first so the schema matches EXPECTED_ALEMBIC_HEAD, then serve.
+    startCommand: >-
+      alembic upgrade head &&
+      gunicorn api.main:app
+      --worker-class uvicorn.workers.UvicornWorker
+      --workers ${WEB_CONCURRENCY:-2}
+      --bind 0.0.0.0:$PORT
+      --timeout 120
+      --access-logfile -
+      --error-logfile -
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.3"
+      # Stable secrets generated once by Render (survive restarts → tokens stay valid).
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SECRET_KEY
+        generateValue: true
+      # Set these in the dashboard (sync:false = not stored in the repo):
+      #   DATABASE_URL  — Render Postgres "Internal Database URL"
+      #   REDIS_URL     — optional; only needed for multi-worker WebSocket fan-out
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: BOOTSTRAP_ADMIN_USER
+        sync: false
+      - key: BOOTSTRAP_ADMIN_PASSWORD
+        sync: false
+      # AI executor agents stay disabled — work is assigned to humans.
+      - key: AEGIS_EXECUTORS_ENABLED
+        value: "false"
+      # Keep false unless REDIS_URL is set — true makes the startup guards fatal
+      # (JWT_SECRET + REDIS_URL become hard requirements).
+      - key: AEGIS_ENFORCE_AUTH
+        value: "false"

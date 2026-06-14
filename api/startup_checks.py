@@ -28,7 +28,7 @@ log = logging.getLogger("aegis.startup")
 # the latest revision under migrations/versions/ — deploys that forget to
 # run `alembic upgrade head` will then refuse to boot instead of serving
 # 500s from a missing column.
-EXPECTED_ALEMBIC_HEAD = "010_task_day_entries"
+EXPECTED_ALEMBIC_HEAD = "011_employee_dept_manager"
 
 
 def _prod() -> bool:
