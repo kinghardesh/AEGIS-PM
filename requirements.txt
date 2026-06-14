@@ -56,4 +56,5 @@ python-docx==1.1.2
 # Testing
 pytest==8.2.2
 pytest-asyncio==0.23.7
-aiosqlite==0.20.0
+aiosqlite==0.20.
+gunicorn
