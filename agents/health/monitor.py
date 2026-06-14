@@ -62,6 +62,15 @@ class AgentName(str, Enum):
     MONITOR      = "monitor_agent"
     COMMUNICATOR = "communicator_agent"
     GROUP_CHAT   = "group_chat"
+    # ── Executor agents: actually perform the Jira work ───────────────────────
+    CODE_WRITER  = "code_writer"
+    TEST_WRITER  = "test_writer"
+    DOC_WRITER   = "doc_writer"
+    RESEARCHER   = "researcher"
+    REVIEWER     = "reviewer"
+    TRIAGE       = "triage"
+    # Autonomous poller that runs queued tasks from the Aegis PM DB
+    PROJECT_POLLER = "project_poller"
 
 
 @dataclass

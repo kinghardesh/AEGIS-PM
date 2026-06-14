@@ -35,6 +35,10 @@ export default function AnalyticsPage() {
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["analytics"],
     queryFn: api.analytics,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchInterval: 15_000,
+    staleTime: 0,
   });
 
   if (isLoading) {
@@ -87,9 +91,9 @@ export default function AnalyticsPage() {
       hint: `${m.total_resolved} resolved · ${m.resolution_rate}%`,
     },
     {
-      label: "Team capacity",
-      value: `${m.available_employees}/${m.total_employees}`,
-      hint: "Available members",
+      label: "Active members",
+      value: `${data.employee_workload.filter((e) => e.total_tasks > 0).length}/${m.total_employees}`,
+      hint: "With at least one assigned task",
     },
   ];
 
@@ -103,23 +107,32 @@ export default function AnalyticsPage() {
     label: d.label,
     alerts: d.count,
   }));
-  const workloadData = data.employee_workload.map((e) => ({
-    name: e.name,
-    Todo: e.todo,
-    "In progress": e.in_progress,
-    Done: e.done,
-  }));
-  const assigneeData = data.assignee_breakdown.slice(0, 8).map((a) => ({
-    name: a.assignee,
-    Pending: a.pending,
-    Approved: a.approved,
-  }));
-  const projectData = data.projects_summary.map((p) => ({
-    name: p.name.length > 16 ? p.name.slice(0, 14) + "…" : p.name,
-    Done: p.completed_tasks,
-    Remaining: p.total_tasks - p.completed_tasks,
-    completion: p.completion_pct,
-  }));
+  const workloadData = data.employee_workload
+    .filter((e) => e.total_tasks > 0)
+    .map((e) => ({
+      name: e.name,
+      Todo: e.todo,
+      "In progress": e.in_progress,
+      Done: e.done,
+    }));
+  const employeeCompletionData = data.employee_workload
+    .filter((e) => e.total_tasks > 0)
+    .map((e) => ({
+      name: e.name,
+      completion: Math.round((e.done / e.total_tasks) * 100),
+      done: e.done,
+      total: e.total_tasks,
+    }))
+    .sort((a, b) => b.completion - a.completion)
+    .slice(0, 10);
+  const projectData = data.projects_summary
+    .filter((p) => p.total_tasks > 0)
+    .map((p) => ({
+      name: p.name.length > 16 ? p.name.slice(0, 14) + "…" : p.name,
+      Done: p.completed_tasks,
+      Remaining: p.total_tasks - p.completed_tasks,
+      completion: p.completion_pct,
+    }));
 
   return (
     <>
@@ -227,10 +240,15 @@ export default function AnalyticsPage() {
           <CardHeader>
             <CardTitle>Team workload</CardTitle>
             <CardDescription>
-              Tasks per team member, broken down by status.
+              Only members with assigned tasks — broken down by status.
             </CardDescription>
           </CardHeader>
           <CardContent className="h-72">
+            {workloadData.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+                No tasks have been assigned yet.
+              </div>
+            ) : (
             <ResponsiveContainer>
               <BarChart data={workloadData} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -256,6 +274,7 @@ export default function AnalyticsPage() {
                 <Bar dataKey="Done" stackId="a" fill="#10b981" />
               </BarChart>
             </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
 
@@ -329,28 +348,62 @@ export default function AnalyticsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Alerts by assignee</CardTitle>
-            <CardDescription>Pending vs. approved per person.</CardDescription>
+            <CardTitle>Employee completion rate</CardTitle>
+            <CardDescription>
+              % of assigned tasks marked done, per employee.
+            </CardDescription>
           </CardHeader>
           <CardContent className="h-64">
-            <ResponsiveContainer>
-              <BarChart data={assigneeData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey="name" stroke="currentColor" fontSize={11} />
-                <YAxis stroke="currentColor" fontSize={11} />
-                <Tooltip
-                  contentStyle={{
-                    background: "var(--popover)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    fontSize: 12,
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="Pending" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Approved" fill="#10b981" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {employeeCompletionData.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+                No employees have assigned tasks yet.
+              </div>
+            ) : (
+              <ResponsiveContainer>
+                <BarChart data={employeeCompletionData} layout="vertical">
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="rgba(255,255,255,0.06)"
+                  />
+                  <XAxis
+                    type="number"
+                    domain={[0, 100]}
+                    stroke="currentColor"
+                    fontSize={11}
+                    tickFormatter={(v) => `${v}%`}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    stroke="currentColor"
+                    fontSize={11}
+                    width={90}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--popover)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
+                    formatter={(value, _name, entry) => {
+                      const p = entry?.payload as
+                        | { done: number; total: number }
+                        | undefined;
+                      return [
+                        `${value}%${p ? ` (${p.done}/${p.total})` : ""}`,
+                        "Completion",
+                      ];
+                    }}
+                  />
+                  <Bar
+                    dataKey="completion"
+                    fill="#10b981"
+                    radius={[0, 4, 4, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
       </div>

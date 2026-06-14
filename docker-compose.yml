@@ -105,6 +105,62 @@ services:
 
 
   # ═══════════════════════════════════════════════════════════════════════════
+  #  Migrate – one-shot Alembic runner. Must finish before `api` boots.
+  #  Using a dedicated service (rather than inlining `alembic upgrade head`
+  #  into the api entrypoint) keeps migrations and serving separate:
+  #    - scalable: N api replicas, exactly 1 migrate run
+  #    - observable: failed migrations show up as a distinct service status
+  #    - no race: service_completed_successfully gate below
+  # ═══════════════════════════════════════════════════════════════════════════
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+      target: development
+    container_name: aegis_migrate
+    restart: "no"
+    logging: *default-logging
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+    volumes:
+      - ./api:/app/api:ro
+      - ./migrations:/app/migrations:ro
+      - ./alembic.ini:/app/alembic.ini:ro
+    command: ["alembic", "upgrade", "head"]
+    networks:
+      - aegis-internal
+
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  #  Redis – pub/sub broker for realtime notifications (WS fan-out)
+  # ═══════════════════════════════════════════════════════════════════════════
+  redis:
+    image: redis:7-alpine
+    container_name: aegis_redis
+    <<: *default-restart
+    logging: *default-logging
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    networks:
+      - aegis-internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 160m
+        reservations:
+          memory: 32m
+
+
+  # ═══════════════════════════════════════════════════════════════════════════
   #  FastAPI Backend
   # ═══════════════════════════════════════════════════════════════════════════
   api:
@@ -121,12 +177,17 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
     env_file: .env
     environment:
       # These override anything in .env for Docker networking
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
+      REDIS_URL: redis://redis:6379/0
       # Disable SQLAlchemy echo in containers (use LOG_LEVEL=DEBUG to re-enable)
       SQLALCHEMY_ECHO: "false"
 
@@ -176,6 +237,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy    # reminder_agent publishes to pub/sub
       api:
         condition: service_healthy    # wait for API to be truly ready
 
@@ -184,12 +247,16 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       API_BASE_URL:  http://api:8000  # internal name resolution
+      REDIS_URL:     redis://redis:6379/0  # reminder_agent → notify → pub/sub
       # AEGIS_MODE: agents            # override with: AEGIS_MODE=groupchat
       # POLL_INTERVAL_SECONDS: 300    # override poll interval
 
     volumes:
       # Hot-reload for agent development
       - ./agents:/app/agents:ro
+      # Reminder agent imports api.* (models, notifications, SessionLocal)
+      # Mount read-only so schema changes in the api image still flow through.
+      - ./api:/app/api:ro
 
     command: python -m agents.runner
 

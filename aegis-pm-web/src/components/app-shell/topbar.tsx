@@ -3,9 +3,11 @@
 import * as React from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { Search, Sun, Moon } from "lucide-react";
+import { Search, Sun, Moon, LogOut } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
+import { NotificationBell } from "@/components/app-shell/notification-bell";
+import { useAuth } from "@/lib/auth-context";
 
 function useBreadcrumbs() {
   const pathname = usePathname();
@@ -20,6 +22,7 @@ function useBreadcrumbs() {
 export function Topbar() {
   const crumbs = useBreadcrumbs();
   const { theme, setTheme, resolvedTheme } = useTheme();
+  const { user, logout } = useAuth();
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
 
@@ -72,6 +75,8 @@ export function Topbar() {
           </kbd>
         </button>
 
+        <NotificationBell />
+
         <Button
           variant="ghost"
           size="icon"
@@ -88,6 +93,18 @@ export function Topbar() {
             <Moon className="size-4" />
           )}
         </Button>
+
+        {user && (
+          <div className="ml-2 flex items-center gap-2 border-l border-border pl-3">
+            <div className="hidden text-right text-xs sm:block">
+              <div className="font-medium leading-tight">{user.full_name || user.user_id}</div>
+              <div className="text-muted-foreground capitalize">{user.role}</div>
+            </div>
+            <Button variant="ghost" size="icon" aria-label="Sign out" onClick={logout}>
+              <LogOut className="size-4" />
+            </Button>
+          </div>
+        )}
       </div>
     </header>
   );

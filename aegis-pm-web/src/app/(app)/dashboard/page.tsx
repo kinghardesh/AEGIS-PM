@@ -11,8 +11,161 @@ import {
 import { useProjects } from "@/lib/hooks/use-projects";
 import { useEmployees } from "@/lib/hooks/use-employees";
 import { useAlertStats } from "@/lib/hooks/use-alerts";
+import { useAuth } from "@/lib/auth-context";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { formatDistanceToNow } from "date-fns";
+import Link from "next/link";
 
 export default function DashboardPage() {
+  const { user, ready } = useAuth();
+  if (!ready) return null;
+  // Users see only their assignments; admins see the full workspace view.
+  if (user?.role !== "admin") return <UserDashboard />;
+  return <AdminWorkspaceDashboard />;
+}
+
+// ── User dashboard ────────────────────────────────────────────────────────────
+
+function UserDashboard() {
+  const { user } = useAuth();
+  const tasks = useQuery({
+    queryKey: ["me", "tasks"],
+    queryFn: () => api.alerts.myTasks(),
+    refetchInterval: 8_000,
+    refetchOnWindowFocus: true,
+    refetchOnMount: "always",
+  });
+  const projects = useQuery({
+    queryKey: ["me", "projects"],
+    queryFn: () => api.alerts.myProjects(),
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: true,
+  });
+
+  const openTasks = (tasks.data ?? []).filter((t) => t.status !== "done");
+  const doneTasks = (tasks.data ?? []).filter((t) => t.status === "done");
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Welcome, {user?.full_name || user?.user_id}
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Your assigned tasks and projects.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Stat label="Open tasks" value={openTasks.length} loading={tasks.isLoading} />
+        <Stat label="Completed" value={doneTasks.length} loading={tasks.isLoading} />
+        <Stat label="Projects" value={projects.data?.length ?? 0} loading={projects.isLoading} />
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>My tasks</CardTitle>
+          <CardDescription>
+            <Link href="/my-tasks" className="text-primary hover:underline">
+              Open full list →
+            </Link>
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {tasks.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+          {!tasks.isLoading && openTasks.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              Nothing assigned to you yet — your admin will link you to tasks soon.
+            </p>
+          )}
+          <ul className="space-y-2">
+            {openTasks.slice(0, 6).map((t) => (
+              <li
+                key={t.id}
+                className="flex items-start justify-between gap-3 border-b border-border/60 pb-2 last:border-b-0"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium truncate">{t.title}</span>
+                    <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                      {t.status}
+                    </span>
+                  </div>
+                  {t.description && (
+                    <p className="line-clamp-1 text-xs text-muted-foreground">
+                      {t.description}
+                    </p>
+                  )}
+                </div>
+                <span className="shrink-0 text-[11px] text-muted-foreground">
+                  {t.created_at &&
+                    formatDistanceToNow(new Date(t.created_at), { addSuffix: true })}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>My projects</CardTitle>
+          <CardDescription>Projects you&apos;re contributing to.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {projects.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+          {!projects.isLoading && (projects.data?.length ?? 0) === 0 && (
+            <p className="text-sm text-muted-foreground">No projects yet.</p>
+          )}
+          <ul className="space-y-2">
+            {projects.data?.map((p) => (
+              <li
+                key={p.id}
+                className="border-b border-border/60 pb-2 last:border-b-0"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium truncate">{p.name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {p.my_done}/{p.my_total} mine
+                  </span>
+                </div>
+                {p.description && (
+                  <p className="line-clamp-1 text-xs text-muted-foreground">
+                    {p.description}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  loading,
+}: {
+  label: string;
+  value: number;
+  loading: boolean;
+}) {
+  return (
+    <Card>
+      <CardContent className="pt-6">
+        <div className="text-xs text-muted-foreground">{label}</div>
+        <div className="text-2xl font-semibold">{loading ? "—" : value}</div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Admin workspace dashboard (existing content) ─────────────────────────────
+
+function AdminWorkspaceDashboard() {
   const projects = useProjects();
   const employees = useEmployees();
   const alertStats = useAlertStats();
@@ -59,84 +212,26 @@ export default function DashboardPage() {
   return (
     <>
       <PageHeader
-        title="Dashboard"
-        description="A snapshot of what your team is working on right now."
+        title="Workspace"
+        description="Everything you need to see is below. Keep shipping."
       />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {KPIS.map((kpi) => (
-          <Card key={kpi.label}>
+        {KPIS.map((k) => (
+          <Card key={k.label}>
             <CardHeader className="pb-2">
-              <CardDescription>{kpi.label}</CardDescription>
-              <CardTitle className="text-3xl font-semibold tracking-tight">
-                {kpi.value}
-              </CardTitle>
+              <CardDescription>{k.label}</CardDescription>
+              <CardTitle className="text-2xl font-semibold">{k.value}</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-xs text-muted-foreground">{kpi.hint}</p>
+              <p className="text-xs text-muted-foreground">{k.hint}</p>
             </CardContent>
           </Card>
         ))}
       </div>
-
-      {projects.data && projects.data.length > 0 && (
-        <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent projects</CardTitle>
-              <CardDescription>The 5 most recently updated.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-2">
-                {projects.data.slice(0, 5).map((p) => (
-                  <li
-                    key={p.id}
-                    className="flex items-center justify-between text-sm"
-                  >
-                    <span className="truncate font-medium">{p.name}</span>
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {Math.round(p.progress ?? 0)}%
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Alert breakdown</CardTitle>
-              <CardDescription>Current state of all alerts.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {alertStats.data ? (
-                <ul className="space-y-2 text-sm">
-                  {(["pending", "approved", "notified", "dismissed"] as const).map(
-                    (k) => (
-                      <li
-                        key={k}
-                        className="flex items-center justify-between"
-                      >
-                        <span className="capitalize text-muted-foreground">
-                          {k}
-                        </span>
-                        <span className="font-mono">
-                          {alertStats.data?.[k] ?? 0}
-                        </span>
-                      </li>
-                    )
-                  )}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground">Loading…</p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
     </>
   );
 }
 
-function fmt(n: number, loading: boolean) {
+function fmt(n: number, loading: boolean): string {
   return loading ? "—" : String(n);
 }

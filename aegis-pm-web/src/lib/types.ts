@@ -15,6 +15,21 @@ export type Project = {
   progress?: number;
 };
 
+export type AgentType =
+  | "code_writer"
+  | "test_writer"
+  | "doc_writer"
+  | "researcher"
+  | "reviewer"
+  | "triage";
+
+export type ExecutorStatus =
+  | "queued"
+  | "running"
+  | "done"
+  | "failed"
+  | null;
+
 export type Task = {
   id: number;
   project_id: number;
@@ -29,6 +44,17 @@ export type Task = {
   required_skills: string | null; // JSON string
   required_skills_list?: string[];
   created_at: string;
+  // Executor agent integration
+  agent_type: AgentType | null;
+  executor_status: ExecutorStatus;
+  executor_output: string | null;
+  executor_error: string | null;
+  executor_run_at: string | null;
+  // Employee workflow fields (migration 005)
+  start_date: string | null;
+  end_date: string | null;
+  last_activity_at: string | null;
+  progress_pct: number;
 };
 
 export type Employee = {
@@ -40,6 +66,8 @@ export type Employee = {
   skills_list?: string[];
   availability: "available" | "busy" | "on_leave" | string;
   current_load: number;
+  department: string | null;
+  is_manager: boolean;
   created_at: string;
 };
 
@@ -81,4 +109,6 @@ export type CreateEmployeeInput = {
   role?: string;
   skills?: string[];
   availability?: string;
+  department?: string | null;
+  is_manager?: boolean;
 };

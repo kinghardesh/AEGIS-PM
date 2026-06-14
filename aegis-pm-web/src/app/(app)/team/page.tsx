@@ -1,109 +1,180 @@
 "use client";
 
-import { Mail } from "lucide-react";
+import * as React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Bot, Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { Card, CardContent } from "@/components/ui/card";
-import { useEmployees } from "@/lib/hooks/use-employees";
+import { Button } from "@/components/ui/button";
+import { AgentCard, type Agent } from "@/components/team/agent-card";
+import { TaskDrawer } from "@/components/team/task-drawer";
+import { api } from "@/lib/api";
+import { useAddAiAgents, useEmployees } from "@/lib/hooks/use-employees";
 
+/**
+ * Team page — agent/employee directory with clickable workload bars.
+ *
+ * Data sources (both admin-only):
+ *   /employees                     → skills, availability, email
+ *   /admin/employee-monitoring     → real task counts + status segments
+ * Merged client-side by employee_id so the user sees one card per person.
+ *
+ * Clicking a card (or its workload bar) opens a right-side drawer that
+ * lazily fetches /admin/employees/{id}/tasks and renders the full list.
+ */
 export default function TeamPage() {
-  const { data, isLoading, isError, error } = useEmployees();
+  const employees = useEmployees();
+  const addAi     = useAddAiAgents();
+
+  const monitoring = useQuery({
+    queryKey: ["admin", "employee-monitoring"],
+    queryFn: () => api.admin.employeeMonitoring(),
+    refetchInterval: 20_000,
+  });
+
+  // Build the Agent[] array fed into the card grid.
+  const agents: Agent[] = React.useMemo(() => {
+    type MonitoringRow = NonNullable<typeof monitoring.data>[number];
+    const byId = new Map<number, MonitoringRow>();
+    (monitoring.data ?? []).forEach((m) => byId.set(m.employee_id, m));
+
+    return (employees.data ?? []).map((e) => {
+      const m = byId.get(e.id);
+      return {
+        id:   e.id,
+        name: e.name,
+        role: e.role ?? null,
+        email: e.email ?? null,
+        availability: e.availability,
+        skills: e.skills_list ?? safeParseSkills(e.skills),
+        department: e.department ?? null,
+        is_manager: Boolean(e.is_manager),
+        total: m?.total ?? e.current_load ?? 0,
+        segments: {
+          todo:        m?.todo ?? 0,
+          in_progress: m?.in_progress ?? 0,
+          done:        m?.done ?? 0,
+          paused:      m?.paused ?? 0,
+        },
+      };
+    });
+  }, [employees.data, monitoring.data]);
+
+  // Department filter. "all" shows everyone; otherwise narrow to one dept.
+  const [deptFilter, setDeptFilter] = React.useState<string>("all");
+  const departments = React.useMemo(() => {
+    const set = new Set<string>();
+    agents.forEach((a) => a.department && set.add(a.department));
+    return Array.from(set).sort();
+  }, [agents]);
+  const visibleAgents = React.useMemo(
+    () =>
+      deptFilter === "all"
+        ? agents
+        : agents.filter((a) => (a.department ?? "") === deptFilter),
+    [agents, deptFilter]
+  );
+
+  // Selected card id. Only one card can be "active" at a time — the drawer
+  // always shows exactly the selection, if any.
+  const [selectedId, setSelectedId] = React.useState<number | null>(null);
+  const selectedAgent = agents.find((a) => a.id === selectedId) ?? null;
 
   return (
     <>
       <PageHeader
         title="Team"
-        description="The people Aegis can assign work to."
+        description="The people — and AI agents — Aegis can assign work to. Click a card to see their tasks."
+        actions={
+          <Button
+            onClick={() => addAi.mutate()}
+            disabled={addAi.isPending}
+            className="gap-1.5"
+          >
+            <Sparkles className="size-4" />
+            {addAi.isPending ? "Adding…" : "Add AI agents"}
+          </Button>
+        }
       />
 
-      {isLoading && <Skeleton />}
-      {isError && (
+      {employees.isLoading && <Skeleton />}
+      {employees.isError && (
         <Card>
           <CardContent className="py-12 text-center text-sm text-destructive">
-            {(error as Error).message}
+            {(employees.error as Error).message}
           </CardContent>
         </Card>
       )}
-      {data && data.length === 0 && (
+
+      {employees.data && employees.data.length === 0 && (
         <Card>
-          <CardContent className="py-16 text-center text-sm text-muted-foreground">
-            No team members yet.
+          <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+            <Bot className="size-8 text-muted-foreground" />
+            <p className="text-sm font-medium">No team members yet</p>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              Click <span className="font-medium">Add AI agents</span> to
+              onboard the six executor agents in one click.
+            </p>
           </CardContent>
         </Card>
       )}
-      {data && data.length > 0 && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {data.map((e) => {
-            const skills = e.skills_list ?? safeParse(e.skills);
-            const loadPct = Math.min(100, e.current_load * 15);
-            return (
-              <Card key={e.id}>
-                <CardContent className="space-y-4 p-5">
-                  <div className="flex items-start gap-3">
-                    <div className="grid size-10 place-items-center rounded-full bg-secondary text-sm font-semibold">
-                      {initials(e.name)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="font-medium">{e.name}</div>
-                      <div className="truncate text-xs text-muted-foreground">
-                        {e.role ?? "—"}
-                      </div>
-                    </div>
-                    <AvailabilityPill availability={e.availability} />
-                  </div>
 
-                  {e.email && (
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Mail className="size-3" />
-                      <span className="truncate">{e.email}</span>
-                    </div>
-                  )}
-
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
-                      <span>Workload</span>
-                      <span>{e.current_load} tasks</span>
-                    </div>
-                    <div className="h-1 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-primary"
-                        style={{ width: `${loadPct}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {skills.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {skills.slice(0, 6).map((s) => (
-                        <span
-                          key={s}
-                          className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
-                        >
-                          {s}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
+      {agents.length > 0 && departments.length > 0 && (
+        <div className="mb-4 flex items-center gap-2">
+          <label className="text-xs font-medium text-muted-foreground">
+            Department
+          </label>
+          <select
+            value={deptFilter}
+            onChange={(e) => setDeptFilter(e.target.value)}
+            className="rounded-md border border-input bg-background px-2 py-1 text-xs"
+          >
+            <option value="all">All departments</option>
+            {departments.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+          <span className="text-xs text-muted-foreground">
+            {visibleAgents.length} of {agents.length}
+          </span>
         </div>
       )}
+
+      {agents.length > 0 && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {visibleAgents.map((agent) => (
+            <AgentCard
+              key={agent.id}
+              agent={agent}
+              active={selectedId === agent.id}
+              onOpen={() => setSelectedId(agent.id)}
+            />
+          ))}
+        </div>
+      )}
+
+      <TaskDrawer
+        agent={
+          selectedAgent
+            ? {
+                id:    selectedAgent.id,
+                name:  selectedAgent.name,
+                role:  selectedAgent.role,
+                email: selectedAgent.email,
+              }
+            : null
+        }
+        onClose={() => setSelectedId(null)}
+      />
     </>
   );
 }
 
-function initials(name: string) {
-  return name
-    .split(" ")
-    .map((p) => p[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
+// ── Helpers ────────────────────────────────────────────────────────────────
 
-function safeParse(s: string | undefined): string[] {
+function safeParseSkills(s: string | undefined): string[] {
   if (!s) return [];
   try {
     const v = JSON.parse(s);
@@ -111,24 +182,6 @@ function safeParse(s: string | undefined): string[] {
   } catch {
     return [];
   }
-}
-
-function AvailabilityPill({ availability }: { availability: string }) {
-  const styles: Record<string, string> = {
-    available:
-      "bg-emerald-500/10 text-emerald-700 ring-emerald-500/20 dark:text-emerald-400",
-    busy: "bg-amber-500/10 text-amber-700 ring-amber-500/20 dark:text-amber-400",
-    on_leave: "bg-muted text-muted-foreground ring-border",
-  };
-  const cls =
-    styles[availability] ?? "bg-muted text-muted-foreground ring-border";
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset ${cls}`}
-    >
-      {availability.replace("_", " ")}
-    </span>
-  );
 }
 
 function Skeleton() {

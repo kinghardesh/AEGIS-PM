@@ -102,6 +102,53 @@ export function useAssignAll() {
   });
 }
 
+/**
+ * Balancer-driven auto-assign. Pick the best-fit person for each
+ * unassigned task (human or AI), preferring humans when skills are
+ * comparable. Uses /admin/projects/{id}/balance-assign-all.
+ */
+export function useAutoAssignAll() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.projects.autoAssignAll(id),
+    onSuccess: (data, id) => {
+      qc.invalidateQueries({ queryKey: KEYS.tasks(id) });
+      qc.invalidateQueries({ queryKey: ["admin", "employee-monitoring"] });
+      qc.invalidateQueries({ queryKey: ["admin", "unassigned-tasks"] });
+
+      const changed = data.results.filter(
+        (r) => r.outcome === "new" || r.outcome === "reassigned"
+      );
+      const humans = changed.filter((r) => r.member_type === "HUMAN").length;
+      const ais = changed.length - humans;
+
+      if (changed.length === 0 && data.unchanged > 0) {
+        toast.success(
+          "All tasks already optimally assigned",
+          { description: `${data.unchanged} kept — the balancer agrees with the current owners.` }
+        );
+        return;
+      }
+      if (changed.length === 0) {
+        toast("Nothing to assign", {
+          description: "No open tasks in this project.",
+        });
+        return;
+      }
+
+      const parts: string[] = [];
+      if (data.new > 0) parts.push(`${data.new} new`);
+      if (data.reassigned > 0) parts.push(`${data.reassigned} re-assigned`);
+      if (data.unchanged > 0) parts.push(`${data.unchanged} unchanged`);
+      toast.success(
+        `Auto-assign complete · ${parts.join(" · ")}`,
+        { description: `${humans} to humans · ${ais} to AI` }
+      );
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
 export function useUnassignAll() {
   const qc = useQueryClient();
   return useMutation({

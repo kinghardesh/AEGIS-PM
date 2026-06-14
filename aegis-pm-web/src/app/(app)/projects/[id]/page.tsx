@@ -2,12 +2,24 @@
 
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Sparkles, UserPlus, FileText, BookOpen } from "lucide-react";
+import {
+  ArrowLeft,
+  Sparkles,
+  UserPlus,
+  FileText,
+  BookOpen,
+  Bot,
+  User,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+} from "lucide-react";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   useAssignAll,
+  useAutoAssignAll,
   useParsePrd,
   useProject,
   useProjectTasks,
@@ -19,7 +31,7 @@ import {
   useGenerateInstructions,
   useSetTaskStatus,
 } from "@/lib/hooks/use-tasks";
-import type { Task } from "@/lib/types";
+import type { ExecutorStatus, Task } from "@/lib/types";
 
 export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
@@ -31,6 +43,7 @@ export default function ProjectDetailPage() {
   const employees = useEmployees();
   const parse = useParsePrd();
   const assignAll = useAssignAll();
+  const autoAssignAll = useAutoAssignAll();
   const unassignAll = useUnassignAll();
   const setStatus = useSetTaskStatus(id);
   const generate = useGenerateInstructions(id);
@@ -69,11 +82,20 @@ export default function ProjectDetailPage() {
               {unassignAll.isPending ? "Clearing…" : "Unassign all"}
             </Button>
             <Button
+              variant="outline"
               onClick={() => assignAll.mutate(id)}
-              disabled={assignAll.isPending}
+              disabled={assignAll.isPending || autoAssignAll.isPending}
             >
               <UserPlus className="size-4" />
               {assignAll.isPending ? "Assigning…" : "AI assign"}
+            </Button>
+            <Button
+              onClick={() => autoAssignAll.mutate(id)}
+              disabled={autoAssignAll.isPending || assignAll.isPending}
+              title="Balanced: picks best-fit person (human or AI) for each task, preferring humans when skills are comparable."
+            >
+              <Sparkles className="size-4" />
+              {autoAssignAll.isPending ? "Auto-assigning…" : "Auto-assign"}
             </Button>
           </div>
         }
@@ -111,9 +133,8 @@ export default function ProjectDetailPage() {
               <thead>
                 <tr className="border-b border-border bg-muted/40 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   <th className="px-6 py-3">Task</th>
-                  <th className="px-6 py-3">Priority</th>
-                  <th className="px-6 py-3">Hours</th>
                   <th className="px-6 py-3">Assignee</th>
+                  <th className="px-6 py-3">Priority</th>
                   <th className="px-6 py-3">Status</th>
                   <th className="px-6 py-3 text-right">Actions</th>
                 </tr>
@@ -138,21 +159,14 @@ export default function ProjectDetailPage() {
                       </button>
                     </td>
                     <td className="px-6 py-3">
-                      <PriorityPill priority={t.priority} />
-                    </td>
-                    <td className="px-6 py-3 font-mono text-xs text-muted-foreground">
-                      {t.estimated_hours}h
+                      <AssigneeBadge
+                        assignedName={t.assigned_name}
+                        assignedTo={t.assigned_to}
+                        employees={employees.data ?? []}
+                      />
                     </td>
                     <td className="px-6 py-3">
-                      {t.assigned_name ? (
-                        <span className="text-foreground">
-                          {t.assigned_name}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">
-                          Unassigned
-                        </span>
-                      )}
+                      <PriorityPill priority={t.priority} />
                     </td>
                     <td className="px-6 py-3">
                       <select
@@ -172,14 +186,15 @@ export default function ProjectDetailPage() {
                       </select>
                     </td>
                     <td className="px-6 py-3 text-right">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setOpenTask(t)}
-                      >
-                        <BookOpen className="size-4" />
-                        Details
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setOpenTask(t)}
+                        >
+                          <BookOpen className="size-4" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -209,6 +224,74 @@ export default function ProjectDetailPage() {
         />
       )}
     </>
+  );
+}
+
+function ExecutorStatusPill({ status }: { status: ExecutorStatus }) {
+  if (!status) return null;
+  const map: Record<string, { label: string; icon: React.ReactNode; cls: string }> = {
+    queued: {
+      label: "Queued",
+      icon: <Bot className="size-3" />,
+      cls: "bg-muted text-muted-foreground ring-border",
+    },
+    running: {
+      label: "Running",
+      icon: <Loader2 className="size-3 animate-spin" />,
+      cls: "bg-sky-500/10 text-sky-700 ring-sky-500/20 dark:text-sky-400",
+    },
+    done: {
+      label: "Done",
+      icon: <CheckCircle2 className="size-3" />,
+      cls: "bg-emerald-500/10 text-emerald-700 ring-emerald-500/20 dark:text-emerald-400",
+    },
+    failed: {
+      label: "Failed",
+      icon: <AlertCircle className="size-3" />,
+      cls: "bg-destructive/10 text-destructive ring-destructive/20",
+    },
+  };
+  const m = map[status];
+  if (!m) return null;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset ${m.cls}`}
+    >
+      {m.icon}
+      {m.label}
+    </span>
+  );
+}
+
+function AssigneeBadge({
+  assignedName,
+  assignedTo,
+  employees,
+}: {
+  assignedName: string | null;
+  assignedTo: number | null;
+  employees: { id: number; email?: string | null }[];
+}) {
+  if (!assignedName) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+  // Classify AI vs Human by the aegis.ai email convention (mirrors
+  // the backend balancer's _classify()). Unknown/missing email → Human.
+  const emp = employees.find((e) => e.id === assignedTo);
+  const isAi =
+    !!emp?.email && (emp.email as string).toLowerCase().endsWith("@aegis.ai");
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs ${
+        isAi
+          ? "bg-primary/10 text-primary"
+          : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+      }`}
+      title={isAi ? "AI agent" : "Human employee"}
+    >
+      {isAi ? <Bot className="size-3" /> : <User className="size-3" />}
+      <span className="max-w-[140px] truncate">{assignedName}</span>
+    </span>
   );
 }
 
@@ -300,6 +383,36 @@ function TaskDetailDrawer({
             <p className="text-sm text-muted-foreground">
               No instructions yet. Click Generate to create them.
             </p>
+          )}
+
+          {task.executor_output && (
+            <div className="mt-8 border-t border-border pt-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Executor output
+                  {task.agent_type && (
+                    <span className="ml-2 rounded-md bg-secondary px-1.5 py-0.5 font-mono text-[10px] normal-case tracking-normal">
+                      {task.agent_type}
+                    </span>
+                  )}
+                </h3>
+                <ExecutorStatusPill status={task.executor_status} />
+              </div>
+              <pre className="max-h-[400px] overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-muted/30 p-3 font-mono text-[11px] leading-relaxed">
+                {task.executor_output}
+              </pre>
+            </div>
+          )}
+
+          {task.executor_error && (
+            <div className="mt-8 border-t border-border pt-5">
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-destructive">
+                Executor error
+              </h3>
+              <pre className="whitespace-pre-wrap break-words rounded-md border border-destructive/20 bg-destructive/5 p-3 font-mono text-[11px] text-destructive">
+                {task.executor_error}
+              </pre>
+            </div>
           )}
 
           <div className="mt-8 border-t border-border pt-5">

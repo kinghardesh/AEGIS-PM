@@ -43,7 +43,7 @@ import os
 import time
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional, Literal
 
 from fastapi import FastAPI, HTTPException, Depends, Query, Request, Response
@@ -61,6 +61,23 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from api.security import require_agent_key, require_admin_key, rate_limit, inject_request_id
+from api.auth import (
+    router as auth_router,
+    admin_router as auth_admin_router,
+    get_current_user,
+    require_admin,
+    get_optional_user,
+    UserOut,
+)
+from api.notifications import router as notifications_router, notify, notify_admins
+from api.activity import router as activity_router, ActivityMiddleware, log_activity
+from api.websocket import router as ws_router
+from api.models import (
+    users_table,
+    notifications_table,
+    activity_log_table,
+    user_sessions_table,
+)
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -71,16 +88,30 @@ logging.basicConfig(
 )
 log = logging.getLogger("aegis.api")
 
+# When disabled, the 6 AI executor agents do no work — tasks are created
+# unassigned (agent_type/executor_status = NULL) so humans pick them up.
+EXECUTORS_ENABLED = os.getenv("AEGIS_EXECUTORS_ENABLED", "true").lower() == "true"
+
+# AI agents are represented as employee rows whose email ends with this suffix
+# (created by /team/add-ai-agents). When executors are disabled, no assignment
+# path may route a task to one of them — all work goes to humans.
+AI_AGENT_EMAIL_SUFFIX = "@aegis.ai"
+
+
+def _is_ai_agent_email(email: str | None) -> bool:
+    return (email or "").lower().endswith(AI_AGENT_EMAIL_SUFFIX)
+
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-VALID_STATUSES = {"pending", "approved", "dismissed", "notified"}
+VALID_STATUSES = {"pending", "approved", "dismissed", "notified", "completed"}
 
 # State machine: which transitions are legal
 _TRANSITIONS: dict[str, set[str]] = {
     "pending":   {"approved", "dismissed"},
-    "approved":  {"notified", "pending"},    # reopen from approved too
+    "approved":  {"notified", "pending", "completed"},  # assignee can mark done after approval
     "dismissed": {"pending"},                # reopen
-    "notified":  {"pending"},                # reopen
+    "notified":  {"pending", "completed"},   # assignee can mark done after Slack nudge
+    "completed": {"pending"},                # admin reopen
 }
 
 # ── Database ──────────────────────────────────────────────────────────────────
@@ -122,6 +153,9 @@ alerts_table = sa.Table(
     sa.Column("slack_sent",     sa.Boolean,                  server_default="false"),
     sa.Column("slack_ts",       sa.String(64)),
     sa.Column("notes",          sa.Text),
+    sa.Column("assignee_user_id",     sa.Integer),   # FK users.id — who owns it
+    sa.Column("completed_by_user_id", sa.Integer),   # FK users.id — who closed it
+    sa.Column("completed_at",         sa.DateTime(timezone=True)),
 )
 
 audit_log_table = sa.Table(
@@ -162,6 +196,8 @@ employees_table = sa.Table(
     sa.Column("skills",      sa.Text),              # JSON array stored as text
     sa.Column("availability",sa.String(32),               server_default="available"),
     sa.Column("current_load",sa.Integer,                  server_default="0"),
+    sa.Column("department",  sa.String(128)),       # org unit: engineering, legal, hr, ...
+    sa.Column("is_manager",  sa.Boolean,                  server_default="false"),
     sa.Column("created_at",  sa.DateTime(timezone=True),  server_default=sa.func.now()),
 )
 
@@ -181,15 +217,62 @@ tasks_table = sa.Table(
     sa.Column("required_skills", sa.Text),             # JSON array
     sa.Column("created_at",      sa.DateTime(timezone=True),  server_default=sa.func.now()),
     sa.Column("completed_at",    sa.DateTime(timezone=True)),
+    # ── Executor agent integration ─────────────────────────────────────────────
+    # An executor agent (code_writer, test_writer, doc_writer, researcher,
+    # reviewer, triage) picks up tasks where agent_type IS NOT NULL and
+    # executor_status IN (NULL, 'queued'), runs, and writes the result back.
+    sa.Column("agent_type",       sa.String(32)),    # which executor handles this
+    sa.Column("executor_status",  sa.String(32)),    # NULL | queued | running | done | failed
+    sa.Column("executor_output",  sa.Text),          # markdown deliverable
+    sa.Column("executor_error",   sa.Text),          # error message if failed
+    sa.Column("executor_run_at",  sa.DateTime(timezone=True)),
+    # ── Employee workflow fields (migration 005) ──────────────────────────────
+    sa.Column("start_date",       sa.DateTime(timezone=True)),
+    sa.Column("end_date",         sa.DateTime(timezone=True)),
+    sa.Column("last_activity_at", sa.DateTime(timezone=True)),
+    sa.Column("progress_pct",     sa.Integer, server_default="0"),
 )
 
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """
+    Production lifespan:
+      - run startup guards (config sanity + Alembic head check)
+      - NO create_all / ADD COLUMN IF NOT EXISTS — migrations are the
+        single source of truth for schema. Run `alembic upgrade head`
+        before (or as part of) the API boot. See the `migrate` service
+        in docker-compose.yml.
+      - optional one-shot admin bootstrap via env vars, after the
+        migration has created `users`.
+    """
+    from api.startup_checks import run_all as run_startup_checks
+
     log.info("Aegis PM API — starting up")
-    async with engine.begin() as conn:
-        await conn.run_sync(metadata.create_all)   # safety net; init.sql runs first in Docker
+    await run_startup_checks(engine)
+
+    # Optional bootstrap of the very first admin. Requires the users
+    # table to already exist (migration 002). Skipped if either env var
+    # is unset, and idempotent on repeat boots.
+    boot_user = os.getenv("BOOTSTRAP_ADMIN_USER", "").strip()
+    boot_pw   = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "").strip()
+    if boot_user and boot_pw:
+        from api.auth import hash_password
+        async with engine.begin() as conn:
+            existing = await conn.execute(
+                sa.text("SELECT 1 FROM users WHERE user_id = :u"), {"u": boot_user}
+            )
+            if not existing.first():
+                await conn.execute(
+                    sa.text(
+                        "INSERT INTO users (user_id, password_hash, role, full_name, is_active) "
+                        "VALUES (:u, :p, 'admin', 'Bootstrap Admin', TRUE)"
+                    ),
+                    {"u": boot_user, "p": hash_password(boot_pw)},
+                )
+                log.info("Bootstrap admin '%s' created", boot_user)
+
     yield
     log.info("Aegis PM API — shutting down")
     await engine.dispose()
@@ -215,6 +298,35 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Activity audit middleware — logs mutating requests by authenticated users.
+app.add_middleware(ActivityMiddleware)
+
+# Mount routers
+app.include_router(auth_router)             # /auth/*
+app.include_router(auth_admin_router)       # /admin/*  (router-level admin guard)
+app.include_router(notifications_router)
+app.include_router(activity_router)
+app.include_router(ws_router)
+
+from api.staging import router as staging_router  # noqa: E402 — lazy to avoid cycle
+app.include_router(staging_router)          # /admin/upload-employees, /admin/staging, ...
+
+from api.prd_router import router as prd_router  # noqa: E402
+app.include_router(prd_router)              # /admin/upload-prd, /admin/parse-prd, ...
+
+from api.balancer_router import router as balancer_router  # noqa: E402
+app.include_router(balancer_router)         # /admin/tasks/{id}/balance-assign, /admin/tasks/unassigned
+
+from api.task_days import router as task_days_router  # noqa: E402
+app.include_router(task_days_router)        # /employee/tasks/{id}/generate-days, /days, /check-in
+
+
+# Root-level /me alias (spec §8). Delegates to the same dependency so
+# there's exactly one code path for "who am I".
+@app.get("/me", response_model=UserOut, tags=["Auth"])
+async def me_alias(user: dict = Depends(get_current_user)):
+    return UserOut(**user)
 
 # ── Mount health router ──────────────────────────────────────────────────────
 
@@ -274,6 +386,9 @@ class AlertOut(BaseModel):
     slack_sent:     bool
     slack_ts:       Optional[str]
     notes:          Optional[str]
+    assignee_user_id:     Optional[int] = None
+    completed_by_user_id: Optional[int] = None
+    completed_at:         Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -898,7 +1013,7 @@ async def get_alert_history(
     summary="Generate alerts from real assigned/in-progress tasks in the DB",
     tags=["Alerts – CRUD"],
 )
-async def generate_alerts_from_tasks(db: AsyncSession = Depends(get_db)):
+async def generate_alerts_from_tasks(db: AsyncSession = Depends(get_db), _admin: dict = Depends(require_admin)):
     """
     Scans all tasks that are assigned to an employee (status != 'done').
     For each task, creates a pending alert if one does not already exist
@@ -972,7 +1087,7 @@ async def generate_alerts_from_tasks(db: AsyncSession = Depends(get_db)):
     summary="Full analytics data for the dashboard",
     tags=["Analytics"],
 )
-async def get_analytics(db: AsyncSession = Depends(get_db)):
+async def get_analytics(db: AsyncSession = Depends(get_db), _admin: dict = Depends(require_admin)):
     """
     Returns comprehensive analytics data:
     - Status distribution
@@ -1141,6 +1256,8 @@ class EmployeeCreate(BaseModel):
     role:         Optional[str] = None
     skills:       List[str]     = Field(default_factory=list)
     availability: str           = "available"
+    department:   Optional[str] = None
+    is_manager:   bool          = False
 
 class EmployeeOut(BaseModel):
     id:           int
@@ -1150,18 +1267,21 @@ class EmployeeOut(BaseModel):
     skills:       str      # JSON string
     availability: str
     current_load: int
+    department:   Optional[str] = None
+    is_manager:   bool = False
     created_at:   datetime
     class Config:
         from_attributes = True
 
 
 @app.post("/employees", status_code=201, summary="Add employee", tags=["Employees"])
-async def create_employee(payload: EmployeeCreate, db: AsyncSession = Depends(get_db)):
+async def create_employee(payload: EmployeeCreate, db: AsyncSession = Depends(get_db), _admin: dict = Depends(require_admin)):
     import json
     result = await db.execute(
         employees_table.insert()
         .values(name=payload.name, email=payload.email, role=payload.role,
-                skills=json.dumps(payload.skills), availability=payload.availability)
+                skills=json.dumps(payload.skills), availability=payload.availability,
+                department=payload.department, is_manager=payload.is_manager)
         .returning(employees_table)
     )
     await db.commit()
@@ -1171,7 +1291,7 @@ async def create_employee(payload: EmployeeCreate, db: AsyncSession = Depends(ge
 
 
 @app.get("/employees", summary="List employees", tags=["Employees"])
-async def list_employees(db: AsyncSession = Depends(get_db)):
+async def list_employees(db: AsyncSession = Depends(get_db), _admin: dict = Depends(require_admin)):
     import json
     result = await db.execute(sa.select(employees_table).order_by(employees_table.c.name))
     rows = result.mappings().all()
@@ -1187,7 +1307,7 @@ async def list_employees(db: AsyncSession = Depends(get_db)):
 
 
 @app.put("/employees/{emp_id}", summary="Update employee", tags=["Employees"])
-async def update_employee(emp_id: int, payload: EmployeeCreate, db: AsyncSession = Depends(get_db)):
+async def update_employee(emp_id: int, payload: EmployeeCreate, db: AsyncSession = Depends(get_db), _admin: dict = Depends(require_admin)):
     import json
     result = await db.execute(sa.select(employees_table).where(employees_table.c.id == emp_id))
     if not result.mappings().first():
@@ -1195,7 +1315,8 @@ async def update_employee(emp_id: int, payload: EmployeeCreate, db: AsyncSession
     await db.execute(
         employees_table.update().where(employees_table.c.id == emp_id)
         .values(name=payload.name, email=payload.email, role=payload.role,
-                skills=json.dumps(payload.skills), availability=payload.availability)
+                skills=json.dumps(payload.skills), availability=payload.availability,
+                department=payload.department, is_manager=payload.is_manager)
     )
     await db.commit()
     result2 = await db.execute(sa.select(employees_table).where(employees_table.c.id == emp_id))
@@ -1203,7 +1324,7 @@ async def update_employee(emp_id: int, payload: EmployeeCreate, db: AsyncSession
 
 
 @app.delete("/employees/{emp_id}", summary="Delete employee", tags=["Employees"])
-async def delete_employee(emp_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_employee(emp_id: int, db: AsyncSession = Depends(get_db), _admin: dict = Depends(require_admin)):
     result = await db.execute(sa.select(employees_table).where(employees_table.c.id == emp_id))
     if not result.mappings().first():
         raise HTTPException(404, f"Employee {emp_id} not found")
@@ -1230,7 +1351,7 @@ class ProjectUpdate(BaseModel):
 
 
 @app.put("/projects/{project_id}", summary="Update a project", tags=["Projects"])
-async def update_project(project_id: int, payload: ProjectUpdate, db: AsyncSession = Depends(get_db)):
+async def update_project(project_id: int, payload: ProjectUpdate, db: AsyncSession = Depends(get_db), _admin: dict = Depends(require_admin)):
     result = await db.execute(sa.select(projects_table).where(projects_table.c.id == project_id))
     if not result.mappings().first():
         raise HTTPException(404, f"Project {project_id} not found")
@@ -1246,7 +1367,7 @@ async def update_project(project_id: int, payload: ProjectUpdate, db: AsyncSessi
 
 
 @app.delete("/projects/{project_id}", summary="Delete a project and all its tasks", tags=["Projects"])
-async def delete_project(project_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_project(project_id: int, db: AsyncSession = Depends(get_db), _admin: dict = Depends(require_admin)):
     result = await db.execute(sa.select(projects_table).where(projects_table.c.id == project_id))
     project = result.mappings().first()
     if not project:
@@ -1260,7 +1381,7 @@ async def delete_project(project_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @app.post("/projects", status_code=201, summary="Create project", tags=["Projects"])
-async def create_project(payload: ProjectCreate, db: AsyncSession = Depends(get_db)):
+async def create_project(payload: ProjectCreate, db: AsyncSession = Depends(get_db), _admin: dict = Depends(require_admin)):
     result = await db.execute(
         projects_table.insert()
         .values(name=payload.name, description=payload.description, prd_text=payload.prd_text)
@@ -1272,8 +1393,8 @@ async def create_project(payload: ProjectCreate, db: AsyncSession = Depends(get_
     return dict(row)
 
 
-@app.get("/projects", summary="List projects", tags=["Projects"])
-async def list_projects(db: AsyncSession = Depends(get_db)):
+@app.get("/projects", summary="List projects (admin view)", tags=["Projects"])
+async def list_projects(db: AsyncSession = Depends(get_db), _admin: dict = Depends(require_admin)):
     result = await db.execute(sa.select(projects_table).order_by(projects_table.c.created_at.desc()))
     projects = []
     for r in result.mappings().all():
@@ -1299,7 +1420,7 @@ async def list_projects(db: AsyncSession = Depends(get_db)):
 
 
 @app.get("/projects/{project_id}", summary="Get project detail", tags=["Projects"])
-async def get_project(project_id: int, db: AsyncSession = Depends(get_db)):
+async def get_project(project_id: int, db: AsyncSession = Depends(get_db), _admin: dict = Depends(require_admin)):
     import json
     result = await db.execute(sa.select(projects_table).where(projects_table.c.id == project_id))
     row = result.mappings().first()
@@ -1337,7 +1458,7 @@ async def get_project(project_id: int, db: AsyncSession = Depends(get_db)):
 # ══════════════════════════════════════════════════════════════════════════════
 
 @app.post("/projects/{project_id}/parse", summary="AI parse PRD into tasks", tags=["AI"])
-async def parse_prd(project_id: int, db: AsyncSession = Depends(get_db)):
+async def parse_prd(project_id: int, db: AsyncSession = Depends(get_db), _admin: dict = Depends(require_admin)):
     """
     Uses OpenAI to parse the project's PRD text into structured tasks.
     Each task gets a title, description, priority, estimated hours, and required skills.
@@ -1418,6 +1539,16 @@ PRD:
             parts.append(f"**Tech hints:** {t['tech_hints']}")
         rich_description = "\n\n".join(parts) if parts else t.get("description", "")
 
+        skills = t.get("required_skills", []) or []
+        # With executors disabled, leave tasks unassigned so humans pick them up.
+        if EXECUTORS_ENABLED:
+            agent_type = _classify_agent_type(
+                t.get("title", ""), rich_description, skills,
+            )
+            executor_status = "queued"   # auto-enqueue for the poller
+        else:
+            agent_type = None
+            executor_status = None
         ins = await db.execute(
             tasks_table.insert().values(
                 project_id=project_id,
@@ -1425,7 +1556,9 @@ PRD:
                 description=rich_description,
                 priority=t.get("priority", "medium"),
                 estimated_hours=t.get("estimated_hours", 4),
-                required_skills=json.dumps(t.get("required_skills", [])),
+                required_skills=json.dumps(skills),
+                agent_type=agent_type,
+                executor_status=executor_status,
             ).returning(tasks_table)
         )
         created_tasks.append(dict(ins.mappings().first()))
@@ -1439,6 +1572,63 @@ PRD:
 
     log.info("Parsed PRD for project %d: %d tasks created", project_id, len(created_tasks))
     return {"project_id": project_id, "tasks_created": len(created_tasks), "tasks": created_tasks}
+
+
+def _classify_agent_type(
+    title:  str,
+    description: str,
+    skills: list[str],
+) -> str:
+    """
+    Map a task to one of the 6 executor agents based on keywords in its
+    title, description, and required_skills.
+
+    Rule set is intentionally simple and conservative — code_writer is the
+    default for anything that looks like implementation work. A future
+    improvement is to let the LLM pick during PRD parsing.
+
+    Returns one of:
+      'code_writer' | 'test_writer' | 'doc_writer' |
+      'researcher'  | 'reviewer'    | 'triage'
+    """
+    text = f"{title} {description}".lower()
+    skill_set = {s.lower() for s in (skills or [])}
+
+    # Order matters — first match wins, so most-specific keywords go first.
+    RULES: list[tuple[str, tuple[str, ...]]] = [
+        ("test_writer", (
+            "unit test", "integration test", "write test", "add test",
+            "test coverage", "pytest", "vitest", "jest", "qa", "test suite",
+        )),
+        ("doc_writer", (
+            "document", "documentation", "readme", "runbook", "adr",
+            "api doc", "user guide", "changelog", "release notes",
+        )),
+        ("triage", (
+            "bug", "incident", "crash", "error", "regression", "triage",
+            "root cause", "hotfix", "outage", "debug",
+        )),
+        ("reviewer", (
+            "code review", "review pr", "review diff", "review the code",
+            "audit the", "security review",
+        )),
+        ("researcher", (
+            "research", "investigate", "evaluate", "spike", "compare ",
+            "prototype", "feasibility", "trade-off", "benchmark",
+        )),
+    ]
+    for agent, keywords in RULES:
+        if any(kw in text for kw in keywords):
+            return agent
+
+    # Skill-based hints (docs, testing skills)
+    if "testing" in skill_set:
+        return "test_writer"
+    if "docs" in skill_set or "documentation" in skill_set:
+        return "doc_writer"
+
+    # Default: code_writer handles generic implementation work.
+    return "code_writer"
 
 
 def _fallback_parse_prd(prd_text: str) -> list:
@@ -1499,7 +1689,7 @@ def _fallback_parse_prd(prd_text: str) -> list:
 # ══════════════════════════════════════════════════════════════════════════════
 
 @app.post("/projects/{project_id}/unassign-all", summary="Clear assignees on all tasks in a project", tags=["AI"])  # touch
-async def unassign_all(project_id: int, db: AsyncSession = Depends(get_db)):
+async def unassign_all(project_id: int, db: AsyncSession = Depends(get_db), _admin: dict = Depends(require_admin)):
     res = await db.execute(
         tasks_table.update()
         .where(tasks_table.c.project_id == project_id)
@@ -1511,7 +1701,7 @@ async def unassign_all(project_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @app.post("/projects/{project_id}/assign-all", summary="AI assign all unassigned tasks", tags=["AI"])
-async def ai_assign_all(project_id: int, db: AsyncSession = Depends(get_db)):
+async def ai_assign_all(project_id: int, db: AsyncSession = Depends(get_db), _admin: dict = Depends(require_admin)):
     """
     For each unassigned task in the project, use AI to match the best employee
     based on skill overlap, current workload, and availability.
@@ -1529,10 +1719,16 @@ async def ai_assign_all(project_id: int, db: AsyncSession = Depends(get_db)):
     if not unassigned:
         return {"message": "No unassigned tasks", "assignments": []}
 
-    # Get available employees
-    emp_result = await db.execute(
-        sa.select(employees_table).where(employees_table.c.availability == "available")
+    # Get available employees. With executors disabled, exclude the AI agent
+    # records (@aegis.ai) so tasks are only ever matched to human employees.
+    emp_query = sa.select(employees_table).where(
+        employees_table.c.availability == "available"
     )
+    if not EXECUTORS_ENABLED:
+        emp_query = emp_query.where(
+            sa.not_(employees_table.c.email.ilike(f"%{AI_AGENT_EMAIL_SUFFIX}"))
+        )
+    emp_result = await db.execute(emp_query)
     employees = []
     for r in emp_result.mappings().all():
         d = dict(r)
@@ -1619,6 +1815,41 @@ async def ai_assign_all(project_id: int, db: AsyncSession = Depends(get_db)):
         if task_row and await send_assignment_email(a["employee_email"], a["assigned_to"], dict(task_row), project_name):
             emails_sent += 1
 
+    # Push in-app notifications so each assignee's /my-tasks page refetches
+    # immediately. Build the employee_id → users.id map in one round-trip.
+    emp_ids = [a["employee_id"] for a in assignments if a.get("employee_id")]
+    if emp_ids:
+        user_rows = (
+            await db.execute(
+                sa.select(users_table.c.id, users_table.c.employee_id)
+                .where(users_table.c.employee_id.in_(emp_ids))
+            )
+        ).all()
+        emp_to_user = {eid: uid for (uid, eid) in user_rows}
+        for a in assignments:
+            target_user_id = emp_to_user.get(a["employee_id"])
+            if not target_user_id:
+                continue
+            try:
+                await notify(
+                    db,
+                    user_id=target_user_id,
+                    kind="task_assigned",
+                    title=f"New task: {a['task_title']}",
+                    body=(
+                        f"AI assigned you this task"
+                        + (f" · {project_name}" if project_name else "")
+                        + f" (match {a['confidence']}%)"
+                    ),
+                    resource_type="task",
+                    resource_id=a["task_id"],
+                )
+            except Exception as e:
+                log.warning(
+                    "ai-assign-all notify failed task=%d: %s",
+                    a["task_id"], e,
+                )
+
     log.info("AI assigned %d tasks in project %d (%d emails sent)", len(assignments), project_id, emails_sent)
     return {"project_id": project_id, "assignments": assignments, "total_assigned": len(assignments), "emails_sent": emails_sent}
 
@@ -1631,7 +1862,7 @@ class TaskStatusUpdate(BaseModel):
     status: str = Field(..., pattern="^(todo|in_progress|done)$")
 
 @app.get("/projects/{project_id}/tasks", summary="Get project tasks", tags=["Tasks"])
-async def list_project_tasks(project_id: int, db: AsyncSession = Depends(get_db)):
+async def list_project_tasks(project_id: int, db: AsyncSession = Depends(get_db), _admin: dict = Depends(require_admin)):
     import json
     result = await db.execute(
         sa.select(tasks_table).where(tasks_table.c.project_id == project_id)
@@ -1657,11 +1888,27 @@ async def list_project_tasks(project_id: int, db: AsyncSession = Depends(get_db)
 
 
 @app.put("/tasks/{task_id}/status", summary="Update task status", tags=["Tasks"])
-async def update_task_status(task_id: int, body: TaskStatusUpdate, db: AsyncSession = Depends(get_db)):
+async def update_task_status(
+    task_id: int,
+    body: TaskStatusUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Admins can update any task's status. Regular users can update only a
+    task whose `assigned_to` matches their linked `employee_id`. This lets
+    a user mark their own task in-progress / done from their dashboard
+    without giving them global write access.
+    """
     result = await db.execute(sa.select(tasks_table).where(tasks_table.c.id == task_id))
     task = result.mappings().first()
     if not task:
         raise HTTPException(404, f"Task {task_id} not found")
+
+    if current_user["role"] != "admin":
+        emp_id = current_user.get("employee_id")
+        if emp_id is None or task["assigned_to"] != emp_id:
+            raise HTTPException(403, "You can only update your own assigned tasks")
 
     update_vals = {"status": body.status}
     if body.status == "done":
@@ -1734,7 +1981,12 @@ async def send_assignment_email(to_email: str, to_name: str, task: dict, project
 
 
 @app.post("/tasks/{task_id}/assign", summary="Manually assign a task to an employee", tags=["Tasks"])
-async def assign_task(task_id: int, body: TaskAssignBody, db: AsyncSession = Depends(get_db)):
+async def assign_task(
+    task_id: int,
+    body:    TaskAssignBody,
+    db:      AsyncSession = Depends(get_db),
+    admin:   dict = Depends(require_admin),
+):
     result = await db.execute(sa.select(tasks_table).where(tasks_table.c.id == task_id))
     task = result.mappings().first()
     if not task:
@@ -1745,6 +1997,13 @@ async def assign_task(task_id: int, body: TaskAssignBody, db: AsyncSession = Dep
     employee = emp_result.mappings().first()
     if not employee:
         raise HTTPException(404, f"Employee {body.employee_id} not found")
+
+    # AI agents are disabled — tasks may only be assigned to human employees.
+    if not EXECUTORS_ENABLED and _is_ai_agent_email(employee.get("email")):
+        raise HTTPException(
+            400,
+            "AI agents are disabled. Assign this task to a human employee instead.",
+        )
 
     await db.execute(
         tasks_table.update().where(tasks_table.c.id == task_id)
@@ -1762,6 +2021,33 @@ async def assign_task(task_id: int, body: TaskAssignBody, db: AsyncSession = Dep
     if employee.get("email"):
         email_sent = await send_assignment_email(employee["email"], employee["name"], updated, project_name)
 
+    # In-app notification + WS push → the employee's /my-tasks page
+    # refetches immediately because the WS hook invalidates the
+    # ["me","tasks"] / ["employee","tasks"] queries on this kind.
+    try:
+        target_user = (
+            await db.execute(
+                sa.select(users_table.c.id)
+                .where(users_table.c.employee_id == body.employee_id)
+            )
+        ).first()
+        if target_user:
+            await notify(
+                db,
+                user_id=target_user[0],
+                kind="task_assigned",
+                title=f"New task: {updated['title']}",
+                body=(
+                    f"Admin assigned you {updated['title']}"
+                    + (f" · {project_name}" if project_name else "")
+                ),
+                resource_type="task",
+                resource_id=task_id,
+                actor_user_id=admin["id"],
+            )
+    except Exception as e:
+        log.warning("task-assign notify failed task=%d: %s", task_id, e)
+
     log.info("Task %d manually assigned to employee %d (%s) email_sent=%s",
              task_id, body.employee_id, body.employee_name, email_sent)
     updated["email_sent"] = email_sent
@@ -1769,7 +2055,7 @@ async def assign_task(task_id: int, body: TaskAssignBody, db: AsyncSession = Dep
 
 
 @app.post("/tasks/{task_id}/pause", summary="Pause a task", tags=["Tasks"])
-async def pause_task(task_id: int, db: AsyncSession = Depends(get_db)):
+async def pause_task(task_id: int, db: AsyncSession = Depends(get_db), _admin: dict = Depends(require_admin)):
     result = await db.execute(sa.select(tasks_table).where(tasks_table.c.id == task_id))
     task = result.mappings().first()
     if not task:
@@ -1784,7 +2070,7 @@ async def pause_task(task_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @app.post("/tasks/{task_id}/resume", summary="Resume a paused task", tags=["Tasks"])
-async def resume_task(task_id: int, db: AsyncSession = Depends(get_db)):
+async def resume_task(task_id: int, db: AsyncSession = Depends(get_db), _admin: dict = Depends(require_admin)):
     result = await db.execute(sa.select(tasks_table).where(tasks_table.c.id == task_id))
     task = result.mappings().first()
     if not task:
@@ -1799,7 +2085,7 @@ async def resume_task(task_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @app.post("/tasks/{task_id}/generate-instructions", summary="AI-generate developer instructions for a task", tags=["AI"])
-async def generate_task_instructions(task_id: int, db: AsyncSession = Depends(get_db)):
+async def generate_task_instructions(task_id: int, db: AsyncSession = Depends(get_db), _admin: dict = Depends(require_admin)):
     """
     Use Groq (LLaMA) to generate developer-facing implementation instructions
     for a single existing task, using its title + the parent project's PRD as context.
@@ -1969,7 +2255,7 @@ Return ONLY valid JSON (no markdown fences) with this shape:
 
 
 @app.delete("/tasks/{task_id}", summary="Delete a task", tags=["Tasks"])
-async def delete_task(task_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_task(task_id: int, db: AsyncSession = Depends(get_db), _admin: dict = Depends(require_admin)):
     result = await db.execute(sa.select(tasks_table).where(tasks_table.c.id == task_id))
     task = result.mappings().first()
     if not task:
@@ -2001,7 +2287,7 @@ async def delete_task(task_id: int, db: AsyncSession = Depends(get_db)):
 # ══════════════════════════════════════════════════════════════════════════════
 
 @app.get("/projects/{project_id}/analytics", summary="Project analytics", tags=["Analytics"])
-async def project_analytics(project_id: int, db: AsyncSession = Depends(get_db)):
+async def project_analytics(project_id: int, db: AsyncSession = Depends(get_db), _admin: dict = Depends(require_admin)):
     import json
     # Get project
     proj_result = await db.execute(sa.select(projects_table).where(projects_table.c.id == project_id))
@@ -2047,4 +2333,934 @@ async def project_analytics(project_id: int, db: AsyncSession = Depends(get_db))
         "priority_breakdown": {"high": high, "medium": medium, "low": low},
         "workload": [{"assignee": k, **v} for k, v in sorted(workload.items(), key=lambda x: -x[1]["total"])],
         "hours": {"total_estimated": round(total_hours, 1), "completed": round(completed_hours, 1)},
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Routes – Executor Agents (ad-hoc, website-driven)
+#
+#  Let a user run one of the six executor agents (code_writer, test_writer,
+#  doc_writer, researcher, reviewer, triage) directly from the website without
+#  going through a Jira ticket. The LLM is called synchronously; typical
+#  latency is 5-60s depending on the model and task.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ExecutorRunRequest(BaseModel):
+    agent:       str  = Field(..., description="Executor name, e.g. 'code_writer'")
+    summary:     str  = Field(..., min_length=1, max_length=500)
+    description: str  = Field("",  max_length=20000)
+
+
+class ExecutorInfo(BaseModel):
+    name:        str
+    label:       str
+    header:      str
+
+
+class ExecutorRunResponse(BaseModel):
+    agent:       str
+    summary:     str
+    deliverable: str
+    duration_ms: float
+
+
+@app.get(
+    "/executors",
+    response_model=List[ExecutorInfo],
+    summary="List available executor agents",
+    tags=["Executors"],
+)
+def list_executors(_admin: dict = Depends(require_admin)):
+    """
+    Returns the six executor agents (name, Jira label, deliverable header) so
+    the website can populate the agent picker.
+    """
+    from agents.executors import EXECUTORS
+    return [
+        {
+            "name":   name,
+            "label":  cls.AGENT_LABEL,
+            "header": cls.DELIVERABLE_HEADER,
+        }
+        for name, cls in EXECUTORS.items()
+    ]
+
+
+@app.post(
+    "/executors/run",
+    response_model=ExecutorRunResponse,
+    summary="Run an executor agent ad-hoc (no Jira ticket)",
+    tags=["Executors"],
+)
+def run_executor_adhoc(req: ExecutorRunRequest, _admin: dict = Depends(require_admin)):
+    """
+    Run one of the six executor agents on a user-supplied summary + description
+    and return the generated deliverable as markdown. Used by the /executors
+    page in the website — users enter their task here and get it done.
+
+    Note: this is synchronous and may take 5-60s. FastAPI runs sync `def`
+    endpoints in the thread pool so the event loop is not blocked.
+    """
+    from agents.executors import EXECUTORS
+
+    if req.agent not in EXECUTORS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Unknown agent '{req.agent}'. "
+                f"Valid options: {sorted(EXECUTORS.keys())}"
+            ),
+        )
+
+    t0 = time.perf_counter()
+    try:
+        executor = EXECUTORS[req.agent]()
+        deliverable = executor.produce_deliverable(
+            task_key="ADHOC",
+            summary=req.summary,
+            description=req.description,
+        )
+    except Exception as exc:
+        log.exception("Executor %s crashed on ad-hoc run: %s", req.agent, exc)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Executor '{req.agent}' failed: {exc}",
+        )
+    duration_ms = (time.perf_counter() - t0) * 1000
+
+    log.info(
+        "Executor %s ad-hoc run: %.0fms  summary='%s'",
+        req.agent, duration_ms, req.summary[:80],
+    )
+    return {
+        "agent":       req.agent,
+        "summary":     req.summary,
+        "deliverable": deliverable,
+        "duration_ms": duration_ms,
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Routes – Autonomous Task Execution
+#
+#  These endpoints connect the six executor agents to the tasks table so that
+#  a task can be:
+#    - tagged with an agent_type (who will do it)
+#    - enqueued for execution (the ProjectPoller will pick it up)
+#    - run immediately (synchronous, same as /executors/run but scoped to a task)
+#    - queried for its output after a run
+#
+#  This is what makes the agents "take input directly from the project" — when
+#  a PRD is parsed, each task is auto-classified to one of the six agents and
+#  marked executor_status='queued'. The poller then picks them up and runs.
+# ══════════════════════════════════════════════════════════════════════════════
+
+_VALID_AGENTS = {
+    "code_writer", "test_writer", "doc_writer",
+    "researcher",  "reviewer",    "triage",
+}
+
+
+class AgentTypeUpdate(BaseModel):
+    agent_type: str = Field(..., description="One of the six executor names")
+
+
+@app.put(
+    "/tasks/{task_id}/agent-type",
+    summary="Set or change the executor agent assigned to a task",
+    tags=["Executors"],
+)
+async def set_task_agent_type(
+    task_id: int,
+    payload: AgentTypeUpdate,
+    db: AsyncSession = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    if payload.agent_type not in _VALID_AGENTS:
+        raise HTTPException(
+            400,
+            f"Invalid agent_type '{payload.agent_type}'. Valid: {sorted(_VALID_AGENTS)}",
+        )
+    result = await db.execute(
+        sa.select(tasks_table).where(tasks_table.c.id == task_id)
+    )
+    if not result.mappings().first():
+        raise HTTPException(404, f"Task {task_id} not found")
+
+    await db.execute(
+        tasks_table.update()
+        .where(tasks_table.c.id == task_id)
+        .values(
+            agent_type=payload.agent_type,
+            # Clear prior output/status so the task is reprocessable
+            executor_status="queued",
+            executor_error=None,
+        )
+    )
+    await db.commit()
+    log.info("Task %d agent_type → %s (enqueued)", task_id, payload.agent_type)
+    row = (await db.execute(
+        sa.select(tasks_table).where(tasks_table.c.id == task_id)
+    )).mappings().first()
+    return dict(row)
+
+
+@app.post(
+    "/tasks/{task_id}/execute",
+    summary="Run the task's executor agent synchronously and store the result",
+    tags=["Executors"],
+)
+async def execute_task(task_id: int, db: AsyncSession = Depends(get_db), _admin: dict = Depends(require_admin)):
+    """
+    Runs the task's assigned executor inline, stores the deliverable on the
+    task row, and transitions task.status to 'done'. Typical latency 5-60s.
+
+    If no agent_type is set, it's auto-classified on the fly.
+    """
+    from agents.executors import EXECUTORS
+
+    row = (await db.execute(
+        sa.select(tasks_table).where(tasks_table.c.id == task_id)
+    )).mappings().first()
+    if not row:
+        raise HTTPException(404, f"Task {task_id} not found")
+
+    agent_type = row.get("agent_type")
+    if not agent_type:
+        import json as _json
+        try:
+            skills = _json.loads(row["required_skills"] or "[]")
+        except Exception:
+            skills = []
+        agent_type = _classify_agent_type(
+            row["title"] or "", row["description"] or "", skills,
+        )
+
+    if agent_type not in EXECUTORS:
+        raise HTTPException(400, f"No executor for agent_type '{agent_type}'")
+
+    # Mark as running
+    await db.execute(
+        tasks_table.update()
+        .where(tasks_table.c.id == task_id)
+        .values(
+            agent_type=agent_type,
+            executor_status="running",
+            status="in_progress",
+        )
+    )
+    await db.commit()
+
+    # Produce the deliverable (blocking — runs in FastAPI thread pool)
+    t0 = time.perf_counter()
+    try:
+        executor = EXECUTORS[agent_type]()
+        deliverable = executor.produce_deliverable(
+            task_key=f"TASK-{task_id}",
+            summary=row["title"] or "",
+            description=row["description"] or "",
+        )
+    except Exception as exc:
+        log.exception("Executor failed on task %d: %s", task_id, exc)
+        await db.execute(
+            tasks_table.update()
+            .where(tasks_table.c.id == task_id)
+            .values(
+                executor_status="failed",
+                executor_error=str(exc)[:2000],
+                status="todo",   # roll back so a human can retry
+            )
+        )
+        await db.commit()
+        raise HTTPException(500, f"Executor failed: {exc}")
+
+    duration_ms = (time.perf_counter() - t0) * 1000
+
+    await db.execute(
+        tasks_table.update()
+        .where(tasks_table.c.id == task_id)
+        .values(
+            executor_status="done",
+            executor_output=deliverable,
+            executor_error=None,
+            executor_run_at=datetime.utcnow(),
+            status="done",
+            completed_at=datetime.utcnow(),
+        )
+    )
+    await db.commit()
+
+    log.info(
+        "Task %d executed by %s in %.0fms (%d chars)",
+        task_id, agent_type, duration_ms, len(deliverable),
+    )
+    return {
+        "task_id":       task_id,
+        "agent_type":    agent_type,
+        "deliverable":   deliverable,
+        "duration_ms":   duration_ms,
+        "status":        "done",
+    }
+
+
+@app.get(
+    "/tasks/{task_id}/executor-output",
+    summary="Fetch the executor's output for a task",
+    tags=["Executors"],
+)
+async def get_task_executor_output(task_id: int, db: AsyncSession = Depends(get_db), _admin: dict = Depends(require_admin)):
+    row = (await db.execute(
+        sa.select(tasks_table).where(tasks_table.c.id == task_id)
+    )).mappings().first()
+    if not row:
+        raise HTTPException(404, f"Task {task_id} not found")
+    return {
+        "task_id":         task_id,
+        "agent_type":      row.get("agent_type"),
+        "executor_status": row.get("executor_status"),
+        "executor_output": row.get("executor_output"),
+        "executor_error":  row.get("executor_error"),
+        "executor_run_at": row.get("executor_run_at"),
+    }
+
+
+@app.post(
+    "/team/add-ai-agents",
+    summary="Add the 6 executor AI agents as team members",
+    tags=["Team"],
+)
+async def add_ai_agents_to_team(db: AsyncSession = Depends(get_db), _admin: dict = Depends(require_admin)):
+    """
+    Creates one employee row per executor agent (code_writer, test_writer,
+    doc_writer, researcher, reviewer, triage) so humans can see them on the
+    Team page and the AI assignment logic can route tasks to them.
+
+    Idempotent: identified by the fixed email `<agent>@aegis.ai`. If a row
+    already exists for that email it is skipped, not updated.
+    """
+    import json as _json
+
+    AI_AGENTS = [
+        {
+            "name":   "Code Writer AI",
+            "email":  "code_writer@aegis.ai",
+            "role":   "AI Agent - Code Writer",
+            "skills": ["python", "typescript", "backend", "frontend",
+                       "api", "database", "react"],
+        },
+        {
+            "name":   "Test Writer AI",
+            "email":  "test_writer@aegis.ai",
+            "role":   "AI Agent - Test Writer",
+            "skills": ["testing", "qa", "pytest", "vitest", "integration-tests"],
+        },
+        {
+            "name":   "Doc Writer AI",
+            "email":  "doc_writer@aegis.ai",
+            "role":   "AI Agent - Documentation",
+            "skills": ["documentation", "technical-writing", "markdown", "runbooks"],
+        },
+        {
+            "name":   "Researcher AI",
+            "email":  "researcher@aegis.ai",
+            "role":   "AI Agent - Researcher",
+            "skills": ["research", "analysis", "evaluation", "architecture"],
+        },
+        {
+            "name":   "Reviewer AI",
+            "email":  "reviewer@aegis.ai",
+            "role":   "AI Agent - Code Reviewer",
+            "skills": ["code-review", "security", "refactoring", "best-practices"],
+        },
+        {
+            "name":   "Triage AI",
+            "email":  "triage@aegis.ai",
+            "role":   "AI Agent - Triage",
+            "skills": ["debugging", "incident-response", "observability", "root-cause"],
+        },
+    ]
+
+    added = []
+    skipped = []
+    for agent in AI_AGENTS:
+        # Idempotency key: the fixed aegis.ai email.
+        existing = await db.execute(
+            sa.select(employees_table).where(employees_table.c.email == agent["email"])
+        )
+        if existing.mappings().first():
+            skipped.append(agent["email"])
+            continue
+
+        ins = await db.execute(
+            employees_table.insert().values(
+                name=agent["name"],
+                email=agent["email"],
+                role=agent["role"],
+                skills=_json.dumps(agent["skills"]),
+                availability="available",
+            ).returning(employees_table)
+        )
+        row = dict(ins.mappings().first())
+        added.append(row)
+
+    await db.commit()
+    log.info(
+        "AI agents onboarding: added=%d  skipped=%d",
+        len(added), len(skipped),
+    )
+    return {
+        "added":   len(added),
+        "skipped": len(skipped),
+        "agents":  added,
+    }
+
+
+@app.get(
+    "/executors/queue",
+    summary="List tasks currently queued or running for executor agents",
+    tags=["Executors"],
+)
+async def list_executor_queue(db: AsyncSession = Depends(get_db), _admin: dict = Depends(require_admin)):
+    """Used by the ProjectPoller (and the dashboard) to see what's pending."""
+    result = await db.execute(
+        sa.select(tasks_table)
+        .where(tasks_table.c.agent_type.isnot(None))
+        .where(tasks_table.c.executor_status.in_(["queued", "running"]))
+        .order_by(tasks_table.c.priority.desc(), tasks_table.c.created_at)
+    )
+    return [dict(r) for r in result.mappings().all()]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Routes – Alert assignment & completion (user / admin workflow)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class AssignRequest(BaseModel):
+    user_id: int
+
+
+@app.post(
+    "/alerts/{alert_id}/assign",
+    response_model=AlertOut,
+    summary="Assign an alert to a user or agent (admin)",
+    tags=["Alerts – Actions"],
+)
+async def assign_alert(
+    alert_id: int,
+    body:     AssignRequest,
+    db:       AsyncSession = Depends(get_db),
+    actor:    dict = Depends(require_admin),
+):
+    """
+    Admin picks a user (human or agent row in `users`) to own the alert.
+    The assignee receives an in-app notification and a live WS push.
+    """
+    row = await _fetch_or_404(alert_id, db)
+
+    target = (
+        await db.execute(sa.select(users_table).where(users_table.c.id == body.user_id))
+    ).mappings().first()
+    if not target or not target["is_active"]:
+        raise HTTPException(400, "Target user not found or inactive")
+
+    await db.execute(
+        alerts_table.update()
+        .where(alerts_table.c.id == alert_id)
+        .values(
+            assignee_user_id=body.user_id,
+            assignee=target["full_name"] or target["user_id"],
+            assignee_email=target["email"],
+        )
+    )
+    await db.execute(
+        audit_log_table.insert().values(
+            alert_id=alert_id,
+            from_status=row["status"],
+            to_status=row["status"],
+            actor=f"admin:{actor['user_id']}",
+            notes=f"Assigned to {target['user_id']}",
+        )
+    )
+    await db.commit()
+
+    await notify(
+        db,
+        user_id=body.user_id,
+        kind="task_assigned",
+        title=f"Task assigned: {row['task_key']}",
+        body=row.get("task_summary") or "",
+        resource_type="alert",
+        resource_id=alert_id,
+        actor_user_id=actor["id"],
+    )
+
+    return dict(await _fetch_or_404(alert_id, db))
+
+
+@app.post(
+    "/alerts/{alert_id}/complete",
+    response_model=AlertOut,
+    summary="Mark an alert completed (assignee or admin)",
+    tags=["Alerts – Actions"],
+)
+async def complete_alert(
+    alert_id: int,
+    body:     ActionRequest = ActionRequest(),
+    db:       AsyncSession = Depends(get_db),
+    actor:    dict = Depends(get_current_user),
+):
+    """
+    The assignee — or any admin — marks an alert completed.
+    Admin dashboard is notified so the "who completed what" feed updates live.
+    """
+    row = await _fetch_or_404(alert_id, db)
+
+    is_assignee = row.get("assignee_user_id") == actor["id"]
+    is_admin    = actor["role"] == "admin"
+    if not (is_assignee or is_admin):
+        raise HTTPException(403, "Only the assignee or an admin can complete this alert")
+
+    now = datetime.utcnow()
+    result = await _transition(
+        alert_id=alert_id,
+        to_status="completed",
+        db=db,
+        actor=f"{actor['role']}:{actor['user_id']}",
+        notes=body.notes or "Completed",
+        extra_values={
+            "completed_by_user_id": actor["id"],
+            "completed_at": now,
+        },
+    )
+
+    await notify_admins(
+        db,
+        kind="task_completed",
+        title=f"Completed: {row['task_key']}",
+        body=f"{actor['user_id']} completed {row['task_key']}",
+        resource_type="alert",
+        resource_id=alert_id,
+        actor_user_id=actor["id"],
+    )
+    return result
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Routes – User dashboard (per-user tasks) & Admin dashboard
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get(
+    "/me/alerts",
+    response_model=List[AlertOut],
+    summary="Alerts assigned to the calling user",
+    tags=["User Dashboard"],
+)
+async def my_alerts(
+    user: dict = Depends(get_current_user),
+    db:   AsyncSession = Depends(get_db),
+    status: Optional[str] = Query(None),
+    limit:  int = Query(100, ge=1, le=500),
+):
+    q = sa.select(alerts_table).where(alerts_table.c.assignee_user_id == user["id"])
+    if status:
+        q = q.where(alerts_table.c.status == status)
+    q = q.order_by(alerts_table.c.detected_at.desc()).limit(limit)
+    rows = (await db.execute(q)).mappings().all()
+    return [dict(r) for r in rows]
+
+
+@app.get(
+    "/me/tasks",
+    summary="Tasks assigned to the calling user (via linked employee_id)",
+    tags=["User Dashboard"],
+)
+async def my_tasks(
+    user: dict = Depends(get_current_user),
+    db:   AsyncSession = Depends(get_db),
+    status: Optional[str] = Query(None),
+    limit:  int = Query(100, ge=1, le=500),
+):
+    """
+    Returns tasks whose `assigned_to` points to the user's linked
+    employee_id. Users with no employee link (e.g. fresh self-signups
+    that an admin hasn't yet linked to an employee) get an empty list.
+    """
+    import json as _json
+    emp_id = user.get("employee_id")
+    if emp_id is None:
+        return []
+
+    q = sa.select(tasks_table).where(tasks_table.c.assigned_to == emp_id)
+    if status:
+        q = q.where(tasks_table.c.status == status)
+    q = q.order_by(tasks_table.c.created_at.desc()).limit(limit)
+    rows = (await db.execute(q)).mappings().all()
+    out = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["required_skills_list"] = _json.loads(d.get("required_skills") or "[]")
+        except Exception:
+            d["required_skills_list"] = []
+        out.append(d)
+    return out
+
+
+@app.get(
+    "/me/projects",
+    summary="Projects the calling user has tasks in",
+    tags=["User Dashboard"],
+)
+async def my_projects(
+    user: dict = Depends(get_current_user),
+    db:   AsyncSession = Depends(get_db),
+):
+    """
+    A project is 'mine' if at least one of its tasks is assigned to my
+    linked employee_id. Each row includes per-user progress counters
+    (my_total, my_done) so the user dashboard can render progress
+    against only their own workload, not the whole project.
+    """
+    emp_id = user.get("employee_id")
+    if emp_id is None:
+        return []
+
+    # One round-trip: project row + my task counts via aggregation.
+    t = tasks_table.c
+    p = projects_table.c
+
+    query = (
+        sa.select(
+            p.id,
+            p.name,
+            p.description,
+            p.status,
+            p.total_tasks,
+            p.completed_tasks,
+            p.created_at,
+            p.updated_at,
+            sa.func.count(t.id).label("my_total"),
+            sa.func.sum(sa.case((t.status == "done", 1), else_=0)).label("my_done"),
+        )
+        .select_from(
+            projects_table.join(tasks_table, t.project_id == p.id)
+        )
+        .where(t.assigned_to == emp_id)
+        .group_by(p.id)
+        .order_by(p.created_at.desc())
+    )
+    rows = (await db.execute(query)).mappings().all()
+    return [
+        {
+            **{k: v for k, v in dict(r).items() if k not in ("my_total", "my_done")},
+            "my_total": int(r["my_total"] or 0),
+            "my_done":  int(r["my_done"] or 0),
+        }
+        for r in rows
+    ]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Routes – Employee workflow (additive, spec §5–§7, §11)
+#
+#  These endpoints complement /me/tasks and /admin/create-employee. They are
+#  deliberately named under /employee/* and /admin/* to match the spec; the
+#  existing /me/* and /admin/create-user endpoints are left in place.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ProgressUpdate(BaseModel):
+    progress_pct: int = Field(..., ge=0, le=100)
+    note:         Optional[str] = Field(None, max_length=1000)
+    status:       Optional[Literal["todo", "in_progress", "done", "paused"]] = None
+
+
+def _can_touch_task(task: dict, user: dict) -> bool:
+    """Admin: always. Anyone else: only if assigned to their linked employee."""
+    if user["role"] == "admin":
+        return True
+    emp_id = user.get("employee_id")
+    return emp_id is not None and task.get("assigned_to") == emp_id
+
+
+@app.get(
+    "/employee/tasks",
+    summary="Tasks assigned to the calling employee (alias of /me/tasks)",
+    tags=["Employee"],
+)
+async def employee_tasks(
+    user: dict = Depends(get_current_user),
+    db:   AsyncSession = Depends(get_db),
+    status: Optional[str] = Query(None),
+    limit:  int = Query(100, ge=1, le=500),
+):
+    """
+    Same contract as /me/tasks — kept as a dedicated path per the spec so
+    employee-only clients can be configured with a predictable prefix.
+    """
+    return await my_tasks(user=user, db=db, status=status, limit=limit)
+
+
+@app.post(
+    "/employee/update-progress/{task_id}",
+    summary="Employee updates progress on their assigned task",
+    tags=["Employee"],
+)
+async def employee_update_progress(
+    task_id: int,
+    body:    ProgressUpdate,
+    db:      AsyncSession = Depends(get_db),
+    user:    dict = Depends(get_current_user),
+):
+    """
+    Advances progress on a task.
+
+    Authorisation: admin can update anyone's task; employees/users can
+    only update a task whose `assigned_to == their employee_id`.
+
+    Side effects:
+      - `progress_pct`, `last_activity_at`, optional `status` updated
+      - audit row inserted into activity_log (via middleware isn't enough
+        — we want the payload, not just the verb)
+      - admin inbox gets a notification + WS push via notify_admins()
+    """
+    row = (
+        await db.execute(sa.select(tasks_table).where(tasks_table.c.id == task_id))
+    ).mappings().first()
+    if not row:
+        raise HTTPException(404, f"Task {task_id} not found")
+    if not _can_touch_task(dict(row), user):
+        raise HTTPException(403, "You can only update your own assigned tasks")
+
+    now = datetime.utcnow()
+    update_vals = {
+        "progress_pct":     body.progress_pct,
+        "last_activity_at": now,
+    }
+    if body.status:
+        update_vals["status"] = body.status
+        if body.status == "done":
+            update_vals["completed_at"] = now
+            update_vals["progress_pct"] = 100
+
+    await db.execute(
+        tasks_table.update().where(tasks_table.c.id == task_id).values(**update_vals)
+    )
+    await db.commit()
+
+    # Notify admins of the progress event (persists + WS fan-out in one call).
+    try:
+        await notify_admins(
+            db,
+            kind="task_update",
+            title=f"Progress: {row['title']}",
+            body=(
+                f"{user['user_id']} → {body.progress_pct}%"
+                + (f" · {body.status}" if body.status else "")
+                + (f" · {body.note}" if body.note else "")
+            ),
+            resource_type="task",
+            resource_id=task_id,
+            actor_user_id=user["id"],
+        )
+    except Exception as e:
+        log.warning("progress notify_admins failed task=%d: %s", task_id, e)
+
+    refreshed = (
+        await db.execute(sa.select(tasks_table).where(tasks_table.c.id == task_id))
+    ).mappings().first()
+    return dict(refreshed)
+
+
+@app.get(
+    "/admin/employees/{employee_id}/tasks",
+    summary="Admin view: full task list for one employee",
+    tags=["Admin Dashboard"],
+)
+async def admin_employee_tasks(
+    employee_id: int,
+    _admin: dict = Depends(require_admin),
+    db:     AsyncSession = Depends(get_db),
+):
+    """
+    Returns every task assigned to the given employee, ordered by
+    open-first then newest. Powers the drawer on the Team page.
+    """
+    import json as _json
+    rows = (
+        await db.execute(
+            sa.select(tasks_table)
+            .where(tasks_table.c.assigned_to == employee_id)
+            .order_by(
+                sa.case(
+                    (tasks_table.c.status == "in_progress", 0),
+                    (tasks_table.c.status == "todo", 1),
+                    (tasks_table.c.status == "paused", 2),
+                    else_=3,
+                ),
+                tasks_table.c.created_at.desc(),
+            )
+        )
+    ).mappings().all()
+    out = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["required_skills_list"] = _json.loads(d.get("required_skills") or "[]")
+        except Exception:
+            d["required_skills_list"] = []
+        out.append(d)
+    return out
+
+
+@app.get(
+    "/admin/employee-monitoring",
+    summary="Admin view: all employees + task counts + last activity",
+    tags=["Admin Dashboard"],
+)
+async def admin_employee_monitoring(
+    _admin: dict = Depends(require_admin),
+    db:     AsyncSession = Depends(get_db),
+):
+    """
+    One row per employees record, joined to users (for role + login handle)
+    and aggregated against tasks. Single query, no N+1.
+
+    Columns:
+      employee_id, employee_name, employee_email, user_id, role,
+      total, todo, in_progress, done, paused, last_activity_at,
+      avg_progress
+    """
+    t = tasks_table.c
+    e = employees_table.c
+    u = users_table.c
+
+    query = (
+        sa.select(
+            e.id.label("employee_id"),
+            e.name.label("employee_name"),
+            e.email.label("employee_email"),
+            u.user_id,
+            u.role,
+            u.last_login_at,
+            sa.func.count(t.id).label("total"),
+            sa.func.sum(sa.case((t.status == "todo", 1), else_=0)).label("todo"),
+            sa.func.sum(sa.case((t.status == "in_progress", 1), else_=0)).label("in_progress"),
+            sa.func.sum(sa.case((t.status == "done", 1), else_=0)).label("done"),
+            sa.func.sum(sa.case((t.status == "paused", 1), else_=0)).label("paused"),
+            sa.func.max(t.last_activity_at).label("last_activity_at"),
+            sa.func.avg(t.progress_pct).label("avg_progress"),
+        )
+        .select_from(
+            employees_table
+            .outerjoin(users_table, u.employee_id == e.id)
+            .outerjoin(tasks_table, t.assigned_to == e.id)
+        )
+        .group_by(e.id, e.name, e.email, u.user_id, u.role, u.last_login_at)
+        .order_by(sa.func.max(t.last_activity_at).desc().nullslast())
+    )
+    rows = (await db.execute(query)).mappings().all()
+    return [
+        {
+            **dict(r),
+            "total":        int(r["total"] or 0),
+            "todo":         int(r["todo"] or 0),
+            "in_progress":  int(r["in_progress"] or 0),
+            "done":         int(r["done"] or 0),
+            "paused":       int(r["paused"] or 0),
+            "avg_progress": round(float(r["avg_progress"] or 0), 1),
+        }
+        for r in rows
+    ]
+
+
+@app.get(
+    "/admin/dashboard",
+    summary="Admin dashboard snapshot — status, overview, who completed what",
+    tags=["Admin Dashboard"],
+)
+async def admin_dashboard(
+    _admin: dict = Depends(require_admin),
+    db:     AsyncSession = Depends(get_db),
+):
+    """
+    One-shot payload for the admin landing page:
+      - system.status, system.db, system.active_sessions
+      - tasks.by_status (pending/approved/notified/completed/dismissed)
+      - completions: most recent "who completed what" entries
+      - by_user: per-user completion counts (last 30 days)
+    """
+    # System
+    db_ok = True
+    try:
+        await db.execute(sa.text("SELECT 1"))
+    except Exception:
+        db_ok = False
+    sessions_n = (
+        await db.execute(
+            sa.select(sa.func.count())
+            .select_from(user_sessions_table)
+            .where(user_sessions_table.c.revoked.is_(False))
+        )
+    ).scalar_one()
+
+    # Tasks overview
+    task_status = (
+        await db.execute(
+            sa.select(alerts_table.c.status, sa.func.count().label("n"))
+            .group_by(alerts_table.c.status)
+        )
+    ).all()
+
+    # Who completed what — last 20 completions with user handle joined in.
+    completions = (
+        await db.execute(
+            sa.select(
+                alerts_table.c.id.label("alert_id"),
+                alerts_table.c.task_key,
+                alerts_table.c.task_summary,
+                alerts_table.c.completed_at,
+                users_table.c.user_id.label("completed_by"),
+                users_table.c.role.label("completed_by_role"),
+            )
+            .select_from(
+                alerts_table.outerjoin(
+                    users_table, users_table.c.id == alerts_table.c.completed_by_user_id
+                )
+            )
+            .where(alerts_table.c.status == "completed")
+            .order_by(alerts_table.c.completed_at.desc())
+            .limit(20)
+        )
+    ).mappings().all()
+
+    # Per-user completion counts (30d)
+    cutoff = datetime.utcnow() - timedelta(days=30)
+    by_user = (
+        await db.execute(
+            sa.select(
+                users_table.c.user_id.label("user"),
+                users_table.c.role.label("role"),
+                sa.func.count().label("completed"),
+            )
+            .select_from(
+                alerts_table.join(users_table, users_table.c.id == alerts_table.c.completed_by_user_id)
+            )
+            .where(
+                alerts_table.c.status == "completed",
+                alerts_table.c.completed_at >= cutoff,
+            )
+            .group_by(users_table.c.user_id, users_table.c.role)
+            .order_by(sa.desc("completed"))
+        )
+    ).mappings().all()
+
+    return {
+        "system": {
+            "status": "ok" if db_ok else "degraded",
+            "database": "connected" if db_ok else "unreachable",
+            "active_sessions": sessions_n,
+        },
+        "tasks_by_status": {r.status: r.n for r in task_status},
+        "recent_completions": [dict(r) for r in completions],
+        "completions_by_user_30d": [dict(r) for r in by_user],
     }

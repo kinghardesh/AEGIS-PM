@@ -13,14 +13,20 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Shield,
+  ShieldCheck,
+  Sparkles,
+  Inbox,
+  Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth-context";
 
 type NavItem = {
   label: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
+  adminOnly?: boolean;
 };
 
 const SECTIONS: { title: string; items: NavItem[] }[] = [
@@ -28,19 +34,29 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
     title: "Workspace",
     items: [
       { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { label: "Alerts", href: "/alerts", icon: Bell },
+      { label: "My Tasks", href: "/my-tasks", icon: Inbox },
+      { label: "Alerts", href: "/alerts", icon: Bell, adminOnly: true },
     ],
   },
   {
     title: "Build",
     items: [
-      { label: "Projects", href: "/projects", icon: FolderKanban },
-      { label: "Team", href: "/team", icon: Users },
+      { label: "Projects", href: "/projects", icon: FolderKanban, adminOnly: true },
+      { label: "Team", href: "/team", icon: Users, adminOnly: true },
     ],
   },
   {
     title: "Insights",
-    items: [{ label: "Analytics", href: "/analytics", icon: BarChart3 }],
+    items: [{ label: "Analytics", href: "/analytics", icon: BarChart3, adminOnly: true }],
+  },
+  {
+    title: "Admin",
+    items: [
+      { label: "Admin Console", href: "/admin", icon: ShieldCheck, adminOnly: true },
+      { label: "Employees", href: "/admin/employees", icon: Users, adminOnly: true },
+      { label: "Upload Employees", href: "/admin/staging", icon: Upload, adminOnly: true },
+      { label: "Rank with PRD", href: "/admin/ranking", icon: Sparkles, adminOnly: true },
+    ],
   },
   {
     title: "Account",
@@ -50,7 +66,17 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { user } = useAuth();
   const [collapsed, setCollapsed] = React.useState(false);
+
+  const sections = React.useMemo(
+    () =>
+      SECTIONS.map((s) => ({
+        ...s,
+        items: s.items.filter((i) => !i.adminOnly || user?.role === "admin"),
+      })).filter((s) => s.items.length > 0),
+    [user?.role]
+  );
 
   return (
     <aside
@@ -74,7 +100,7 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-4">
-        {SECTIONS.map((section) => (
+        {sections.map((section) => (
           <div key={section.title} className="mb-6 last:mb-0">
             {!collapsed && (
               <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">

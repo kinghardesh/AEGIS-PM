@@ -31,6 +31,28 @@ pydantic-settings==2.3.3
 # Logging
 structlog==24.2.0
 
+# Auth + realtime (user/admin login, JWT, WS pub/sub)
+bcrypt==4.2.0
+PyJWT==2.9.0
+redis==5.0.8
+websockets==12.0
+email-validator==2.2.0
+
+# Employee-data ingestion (bulk upload → staging)
+openpyxl==3.1.5
+pdfplumber==0.11.4
+python-docx==1.1.2
+
+# Optional local-embedding fallback. Install separately in environments
+# where OpenAI quota is unavailable and semantic ranking must keep working:
+#
+#   pip install fastembed==0.4.2
+#
+# The code at api/embeddings.py:_local_ok() feature-detects the import
+# and returns None gracefully when fastembed is not present, so the
+# pipeline never crashes from its absence — it just falls back from
+# semantic → keyword scoring until fastembed is available.
+
 # Testing
 pytest==8.2.2
 pytest-asyncio==0.23.7
