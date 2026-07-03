@@ -1,38 +1,27 @@
 {
   "canonical_dataset": {
     "source": "live-groq-llama-3.3-70b-versatile",
-    "runs_per_prd": 3,
     "prds": 20,
     "runs": 60,
-    "total_tasks": 409,
-    "clean_runs": 24,
-    "E0_failures": 5,
-    "restored_from": "outputs/ (mirror of the complete 15:37 run)",
-    "archived_incomplete": "eval/_archive/incomplete_quota_batch (91 tasks, 45 E0)"
+    "total_tasks": 445,
+    "clean_runs": 27,
+    "E0": 0,
+    "E1": 3,
+    "batch": "eval/runs/2026-07-04_complete",
+    "recovered": "prd19 run2/3 + prd20 run1-3"
   },
   "jaccard": {
     "all_20": 0.49,
-    "exclude_all_empty_3": 0.4,
-    "exclude_any_empty_4": 0.404,
-    "empty_prds_trivial_1.0": [
+    "exclude_all_empty": 0.433,
+    "all_empty_prds": [
       "prd16_edge_empty",
-      "prd18_edge_injection",
-      "prd20_edge_deep_deps"
+      "prd18_edge_injection"
     ]
   },
   "s5": {
-    "strict": 69,
+    "strict": 84,
     "relaxed": 22,
-    "reclassified_as_valid_verbs": 47,
-    "residual_includes_recipe_hallucination": [
-      "preheat",
-      "grease",
-      "mash",
-      "mix",
-      "fold",
-      "pour",
-      "bake"
-    ]
+    "residual_all_prd19_recipe": true
   },
   "schema_violation_frequency": {
     "S5": 69,
@@ -101,5 +90,24 @@
       "linear-chain"
     ],
     "jaccard": 0.081
+  },
+  "status": "complete-baseline-v1",
+  "e1_over_refusal": {
+    "count": 3,
+    "prd": "prd18_edge_injection"
+  },
+  "prd20_deep_deps": {
+    "counts": [
+      6,
+      6,
+      6
+    ],
+    "topology": "linear chain x3",
+    "violations": 0,
+    "cycles": 0,
+    "self_refs": 0,
+    "forward_refs": 0,
+    "dep_structure_stable": true,
+    "verdict": "deepest-dep PRD is perfectly valid AND stable"
   }
 }

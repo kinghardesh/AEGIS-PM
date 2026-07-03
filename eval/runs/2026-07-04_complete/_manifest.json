@@ -1,0 +1,16 @@
+{
+  "source": "live-groq-llama-3.3-70b-versatile",
+  "runs_per_prd": 3,
+  "assembled_from": {
+    "base": "2026-07-03_partial",
+    "recovery": "2026-07-04_recovery"
+  },
+  "recovered_runs": [
+    "prd19_edge_nonprd_run2.json",
+    "prd19_edge_nonprd_run3.json",
+    "prd20_edge_deep_deps_run1.json",
+    "prd20_edge_deep_deps_run2.json",
+    "prd20_edge_deep_deps_run3.json"
+  ],
+  "note": "complete canonical baseline: partial batch with 5 quota-blocked runs replaced by recovered runs"
+}
