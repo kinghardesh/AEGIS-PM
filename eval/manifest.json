@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "study": "spec-interpreter-baseline-v1",
+  "status": "partial",
+  "canonical_baseline_path": "eval/runs/2026-07-03_partial",
+  "archive_paths": [
+    "eval/archive/incomplete_quota_batch"
+  ],
+  "recovery_batches": [],
+  "timestamp": "2026-07-04T00:30:10",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "source_label": "live-groq-llama-3.3-70b-versatile",
+  "git_tag": "baseline-v1-partial",
+  "git_commit": null,
+  "evaluation_settings": {
+    "runs_per_prd": 3,
+    "temperature": 0.2,
+    "response_format": "json_object",
+    "rate_limit": "429 exp-backoff 5 attempts",
+    "runner_python": "base Python311 (venv311/.venv are broken)"
+  },
+  "scoring_policy": {
+    "file": "eval/scoring_policy.md",
+    "primary_metric": "relaxed_S5",
+    "secondary_metric": "strict_S5",
+    "E1": "empty output where gold expected_task_count.min>0 and not E0"
+  },
+  "totals": {
+    "prds": 20,
+    "runs": 60,
+    "tasks": 409,
+    "E0": 5,
+    "E1": 3,
+    "note": "partial: prd20 all-E0 (quota), prd19 2/3 E0"
+  }
+}

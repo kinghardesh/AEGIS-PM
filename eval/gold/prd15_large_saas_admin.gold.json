@@ -1,0 +1,36 @@
+{
+  "prd_id": "prd15",
+  "file": "prd15_large_saas_admin.md",
+  "title": "Multi-Tenant SaaS Admin Dashboard",
+  "category": "large",
+  "difficulty": "hard",
+  "expected_task_count": {"min": 15, "max": 25},
+  "requirements": [
+    {"id": "R1", "text": "Organizations can self-onboard by creating a tenant (org name, subdomain/slug, first admin account)", "must_have": true},
+    {"id": "R2", "text": "Completing onboarding provisions an isolated tenant workspace and signs in the first admin", "must_have": true},
+    {"id": "R3", "text": "Each tenant has roles that grant sets of permissions, with default Admin and Member roles", "must_have": true},
+    {"id": "R4", "text": "Tenant admins can define custom roles by selecting from available permissions", "must_have": true},
+    {"id": "R5", "text": "Users are assigned one or more roles; effective permissions are the union of their roles' permissions", "must_have": true},
+    {"id": "R6", "text": "Permission-gated actions are enforced against the acting user's effective permissions", "must_have": true},
+    {"id": "R7", "text": "Admins invite users by email with assigned roles; invitees accept via link, set up account, and join the tenant", "must_have": true},
+    {"id": "R8", "text": "Admins can view pending invitations, resend, and revoke an invitation before acceptance", "must_have": true},
+    {"id": "R9", "text": "An immutable audit log records significant actions (who/what/when), viewable and filterable by actor, action type, and date range", "must_have": true},
+    {"id": "R10", "text": "A usage metrics dashboard shows per-tenant time-series metrics (active users, API volume, storage) over a selectable range", "must_have": true},
+    {"id": "R11", "text": "Admins can view the current plan, usage against plan limits, and upgrade or downgrade the plan", "must_have": true},
+    {"id": "R12", "text": "Tenants can configure SAML SSO via IdP metadata (entity ID, SSO URL, certificate); enabled tenants sign in via SAML", "must_have": true},
+    {"id": "R13", "text": "Admins can create named tenant-scoped API keys, list active keys (name, created, last-used), and revoke keys; secret shown only once at creation", "must_have": true},
+    {"id": "R14", "text": "Admins can toggle tenant-level feature flags from a list showing each flag's on/off state", "must_have": true},
+    {"id": "R15", "text": "Admins can request an asynchronous data export and are notified/download it when ready", "must_have": true},
+    {"id": "R16", "text": "Admins configure tenant-level settings (display name, subdomain/slug, default role for new members, default timezone)", "must_have": true},
+    {"id": "R17", "text": "Strict tenant data isolation is enforced so no tenant can access another tenant's data", "must_have": true}
+  ],
+  "known_issues": [],
+  "hallucination_traps": [
+    "Do not add reseller/partner hierarchies (explicitly out of scope)",
+    "Do not add per-seat/per-user billing (explicitly out of scope)",
+    "Do not add OIDC/OAuth SSO (only SAML is in scope; explicitly out of scope)",
+    "Do not invent a specific billing provider (e.g., Stripe) — none is named",
+    "Do not invent specific plan tiers or prices — none are stated"
+  ],
+  "notes": "A faithful parser should produce ~15-25 tasks and respect stated dependencies: nearly all tenant-scoped features depend on tenant onboarding; user invitations depend on RBAC (roles must exist); billing depends on usage metrics. It should treat tenant data isolation, RBAC enforcement, and audit-log recording as cross-cutting constraints applied across tasks rather than inventing provider/plan/pricing details."
+}

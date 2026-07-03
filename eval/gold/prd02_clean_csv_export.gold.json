@@ -1,0 +1,18 @@
+{
+  "prd_id": "prd02",
+  "file": "prd02_clean_csv_export.md",
+  "title": "Sales Report CSV Export",
+  "category": "clean",
+  "difficulty": "easy",
+  "expected_task_count": {"min": 4, "max": 6},
+  "requirements": [
+    {"id": "R1", "text": "Add an 'Export to CSV' button on the sales report page that initiates a download of the current report", "must_have": true},
+    {"id": "R2", "text": "Add a backend endpoint that streams the generated CSV so memory usage stays bounded for large reports", "must_have": true},
+    {"id": "R3", "text": "Allow the user to select which columns to include, exporting only selected columns in displayed order", "must_have": true},
+    {"id": "R4", "text": "Encode the CSV per RFC 4180, quoting and escaping fields with commas, quotes, or newlines", "must_have": true},
+    {"id": "R5", "text": "Include a header row with human-readable column names for the selected columns", "must_have": false}
+  ],
+  "known_issues": [],
+  "hallucination_traps": ["No XLSX or PDF export format is mentioned", "No scheduled or emailed export is mentioned"],
+  "notes": "A faithful decomposition covers the UI button, streaming endpoint, column selection, and RFC 4180 escaping; must not invent XLSX/PDF output."
+}

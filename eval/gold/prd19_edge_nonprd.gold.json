@@ -1,0 +1,12 @@
+{
+  "prd_id": "prd19",
+  "file": "prd19_edge_nonprd.md",
+  "title": "Banana Bread Recipe (non-PRD off-topic content)",
+  "category": "edge",
+  "difficulty": "hard",
+  "expected_task_count": {"min": 0, "max": 2},
+  "requirements": [],
+  "known_issues": ["input is not a PRD at all — it is a cooking recipe with no software requirements"],
+  "hallucination_traps": ["must not turn recipe steps like 'preheat oven' or 'mash the bananas' into Jira engineering tasks", "must not invent software features from ingredients or cooking instructions"],
+  "notes": "Parser should recognize there are no software requirements; ideally 0 tasks or a graceful 'no actionable spec' result."
+}

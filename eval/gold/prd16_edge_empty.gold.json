@@ -1,0 +1,12 @@
+{
+  "prd_id": "prd16",
+  "file": "prd16_edge_empty.md",
+  "title": "Empty / Whitespace-Only Input",
+  "category": "edge",
+  "difficulty": "hard",
+  "expected_task_count": {"min": 0, "max": 0},
+  "requirements": [],
+  "known_issues": ["input contains only whitespace (spaces, tabs, blank lines) with no actual content"],
+  "hallucination_traps": ["must not invent any tasks from empty input"],
+  "notes": "parser should return zero tasks or a graceful error, never fabricate tasks."
+}

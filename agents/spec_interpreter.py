@@ -45,6 +45,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -71,7 +72,27 @@ JIRA_BASE_URL  = os.environ["JIRA_BASE_URL"].rstrip("/")
 JIRA_EMAIL     = os.environ["JIRA_EMAIL"]
 JIRA_API_TOKEN = os.environ["JIRA_API_TOKEN"]
 JIRA_PROJECT   = os.environ["JIRA_PROJECT_KEY"]
-OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
+
+# ── LLM provider config (provider-agnostic, OpenAI-compatible) ────────────────
+# The parser talks to any OpenAI-compatible endpoint. Provider and model are
+# selected purely by environment so no provider/model name is hardcoded here.
+#   LLM_API_KEY  — GROQ_API_KEY if present, else OPENAI_API_KEY
+#   LLM_BASE_URL — OpenAI-compatible base URL (defaults to Groq's)
+#   LLM_MODEL    — model id served at that base URL
+LLM_API_KEY = (
+    os.getenv("GROQ_API_KEY")
+    or os.getenv("OPENAI_API_KEY")
+)
+
+LLM_BASE_URL = os.getenv(
+    "LLM_BASE_URL",
+    "https://api.groq.com/openai/v1",
+)
+
+LLM_MODEL = os.getenv(
+    "LLM_MODEL",
+    "llama-3.3-70b-versatile",
+)
 
 # Default issue type and priority for created tasks
 DEFAULT_ISSUE_TYPE = os.getenv("SPEC_DEFAULT_ISSUE_TYPE", "Story")
@@ -81,8 +102,9 @@ DEFAULT_EPIC_LINK  = os.getenv("SPEC_DEFAULT_EPIC_LINK", "")  # optional epic ke
 LLM_CONFIG: Dict[str, Any] = {
     "config_list": [
         {
-            "model":   os.getenv("OPENAI_MODEL", "gpt-4o"),
-            "api_key": OPENAI_API_KEY,
+            "model":    LLM_MODEL,
+            "api_key":  LLM_API_KEY,
+            "base_url": LLM_BASE_URL,
         }
     ],
     "temperature": 0.3,   # slight creativity for good decomposition
@@ -214,9 +236,14 @@ def parse_specification(prd_text: str) -> str:
     """
     log.info("parse_specification: parsing PRD (%d chars)", len(prd_text))
 
-    # Inner LLM call to parse the spec
+    # Inner LLM call to parse the spec.
+    # Provider-agnostic: any OpenAI-compatible endpoint (Groq, OpenAI, ...),
+    # selected entirely by the LLM_* environment config above.
     import openai
-    client = openai.OpenAI(api_key=OPENAI_API_KEY)
+    client = openai.OpenAI(
+        api_key=LLM_API_KEY,
+        base_url=LLM_BASE_URL,
+    )
 
     system_prompt = """You are a senior engineering project manager and Jira expert.
 Your job is to read a project specification or PRD and decompose it into
@@ -258,15 +285,51 @@ Return JSON matching exactly this schema:
 }}"""
 
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user",   "content": user_prompt},
-            ],
-            temperature=0.2,
-            response_format={"type": "json_object"},
-        )
+        # ── Phase 4: rate-limit protection ──────────────────────────────────
+        # Groq's free tier enforces request limits; on HTTP 429 we back off
+        # exponentially and retry. If every attempt is rate-limited we raise a
+        # clear error rather than silently continuing with no result.
+        MAX_ATTEMPTS = 5
+        response = None
+        for attempt in range(1, MAX_ATTEMPTS + 1):
+            try:
+                response = client.chat.completions.create(
+                    model=LLM_MODEL,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user",   "content": user_prompt},
+                    ],
+                    temperature=0.2,
+                    # Phase 5: JSON mode. If the selected model does not support
+                    # this, the provider raises BadRequestError below and we
+                    # fail loudly instead of silently dropping JSON mode.
+                    response_format={"type": "json_object"},
+                )
+                break
+            except openai.RateLimitError as exc:
+                if attempt == MAX_ATTEMPTS:
+                    raise RuntimeError(
+                        f"Rate-limited by provider after {MAX_ATTEMPTS} attempts "
+                        f"(HTTP 429): {exc}"
+                    ) from exc
+                backoff = 2 ** attempt  # 2, 4, 8, 16 s
+                log.warning(
+                    "parse_specification: HTTP 429 (attempt %d/%d); backing off %ds",
+                    attempt, MAX_ATTEMPTS, backoff,
+                )
+                time.sleep(backoff)
+            except openai.BadRequestError as exc:
+                # Most commonly: the model does not support response_format
+                # json_object. Surface a meaningful, actionable message.
+                msg = str(exc)
+                if "json" in msg.lower() or "response_format" in msg.lower():
+                    raise RuntimeError(
+                        f"Model {LLM_MODEL!r} at {LLM_BASE_URL!r} rejected JSON mode "
+                        f"(response_format=json_object). Choose a model that supports "
+                        f"JSON output. Provider said: {msg}"
+                    ) from exc
+                raise
+
         raw = response.choices[0].message.content
         data = json.loads(raw)
 
@@ -581,6 +644,9 @@ if __name__ == "__main__":
     group.add_argument("--stdin", action="store_true", help="Read PRD from stdin")
     parser.add_argument("--dry-run", action="store_true",
                         help="Parse only – do not create Jira issues (prints tasks)")
+    parser.add_argument("--out", metavar="PATH", default=None,
+                        help="In --dry-run, write the raw parser JSON to this file "
+                             "(default: out.json). Ignored outside dry-run.")
     args = parser.parse_args()
 
     if args.stdin:
@@ -593,6 +659,17 @@ if __name__ == "__main__":
     if args.dry_run:
         print("DRY RUN – parsing only, no Jira issues will be created\n")
         result_json = parse_specification(prd)
+
+        # Persist the RAW parser output verbatim so the eval checker
+        # (eval/check_parse.py) can validate it. We write result_json as-is
+        # rather than re-serialising `parsed`, to guarantee the file is exactly
+        # what parse_specification() returned (no key reordering / whitespace
+        # changes). This is the artefact the stability/schema checks consume.
+        out_path = Path(args.out) if args.out else Path("out.json")
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(result_json, encoding="utf-8")
+        print(f"Raw parser JSON written to {out_path.resolve()}\n")
+
         parsed = json.loads(result_json)
         print(f"Project: {parsed.get('project_title', '?')}")
         print(f"Tasks:   {parsed.get('total_tasks', 0)}\n")

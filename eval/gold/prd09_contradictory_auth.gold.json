@@ -1,0 +1,26 @@
+{
+  "prd_id": "prd09",
+  "file": "prd09_contradictory_auth.md",
+  "title": "Authentication Redesign",
+  "category": "contradictory",
+  "difficulty": "hard",
+  "expected_task_count": {"min": 1, "max": 4},
+  "requirements": [
+    {"id": "R1", "text": "Section A: Authentication must be passwordless using magic email links only; never store or ask for passwords", "must_have": false},
+    {"id": "R2", "text": "Section B: Users log in with a username and password field; enforce a 12-character minimum password policy with secure hashing and a 'Forgot password?' reset link", "must_have": false},
+    {"id": "R3", "text": "Login flow should be accessible, mobile-friendly, localized, with session tokens that expire after inactivity", "must_have": true},
+    {"id": "R4", "text": "Ship behind a feature flag, roll out to 10% first, and collect login success rate and time-to-login metrics", "must_have": true}
+  ],
+  "known_issues": [
+    "DIRECT CONTRADICTION: Section A mandates passwordless magic-email-links only and states 'we will never store passwords', while Section B requires a username+password login, a 12-character password policy, credential hashing/storage, and a password-reset link. R1 and R2 are mutually exclusive.",
+    "The password-reset link in Section B is meaningless under Section A's passwordless model, compounding the conflict.",
+    "It is unspecified which section takes precedence; both are stated as target behavior for the same release."
+  ],
+  "hallucination_traps": [
+    "Do NOT silently pick one authentication model (passwordless OR password-based) and drop the other without flagging the conflict.",
+    "Do NOT invent a reconciliation such as 'passwordless with optional password fallback' or 'magic link as password reset' that the PRD never states.",
+    "Do NOT invent MFA, OAuth/SSO, or a specific email provider — none are mentioned.",
+    "Do NOT invent which section is authoritative or a rollout ordering between the two models."
+  ],
+  "notes": "A faithful parser MUST surface the contradiction between Section A (passwordless, no stored passwords) and Section B (username+password with a 12-char policy) as an explicit blocking question/decision task, rather than emitting tasks for one model as if it were settled. The non-conflicting items (R3 accessibility/session expiry, R4 feature-flag rollout/metrics) can become normal tasks."
+}
