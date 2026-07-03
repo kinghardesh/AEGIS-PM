@@ -26,7 +26,7 @@
   "model": "llama-3.3-70b-versatile",
   "source_label": "live-groq-llama-3.3-70b-versatile",
   "git_tag": "baseline-v1-complete",
-  "git_commit": null,
+  "git_commit": "2de7b5ea738983ac140a5788b6981261688e0c4f",
   "supersedes": {
     "tag": "baseline-v1-partial",
     "commit": "1dda05591dfe950cd41b4f8e0e0f9acb499d8980"
