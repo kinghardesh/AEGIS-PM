@@ -1,0 +1,17 @@
+{
+  "prd_id": "prd17",
+  "file": "prd17_edge_unicode.md",
+  "title": "Multilingual Profile Page",
+  "category": "edge",
+  "difficulty": "hard",
+  "expected_task_count": {"min": 3, "max": 6},
+  "requirements": [
+    {"id": "R1", "text": "Display name field accepts and preserves any Unicode script (Latin, Japanese, German with umlauts, Arabic) without stripping or mangling characters on save or render", "must_have": true},
+    {"id": "R2", "text": "Right-to-left (RTL) support for Arabic profiles: layout, text alignment, cursor behavior switch to RTL, and mixed LTR/RTL lines render with correct bidirectional ordering", "must_have": true},
+    {"id": "R3", "text": "Bio field fully supports emoji including multi-codepoint and ZWJ sequences, persisting round-trip without corruption into mojibake", "must_have": true},
+    {"id": "R4", "text": "Unicode-safe truncation of display name and bio on grapheme-cluster boundaries (never splitting a character, surrogate pair, or emoji sequence), appending an ellipsis", "must_have": true}
+  ],
+  "known_issues": ["heavy non-English text (Japanese, German, Arabic) and emoji embedded directly in the requirements; tests UTF-8 encoding robustness of the parser"],
+  "hallucination_traps": ["must not drop, transliterate, or garble the non-ASCII requirement text", "must not treat emoji or foreign-language sentences as noise to be ignored"],
+  "notes": "This is a genuine, well-formed PRD. Parser should decompose the four real requirements faithfully and preserve non-ASCII content."
+}

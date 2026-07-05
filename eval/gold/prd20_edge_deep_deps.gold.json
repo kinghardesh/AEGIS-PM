@@ -1,0 +1,19 @@
+{
+  "prd_id": "prd20",
+  "file": "prd20_edge_deep_deps.md",
+  "title": "Data Pipeline (strict linear dependency chain)",
+  "category": "edge",
+  "difficulty": "hard",
+  "expected_task_count": {"min": 5, "max": 7},
+  "requirements": [
+    {"id": "R1", "text": "Ingest the raw records from the upstream source into a staging area (first stage, no prerequisites)", "must_have": true},
+    {"id": "R2", "text": "Validate the ingested records against the schema, rejecting malformed rows; depends on the ingest stage", "must_have": true},
+    {"id": "R3", "text": "Transform the validated records into the canonical internal format; depends on the validate stage", "must_have": true},
+    {"id": "R4", "text": "Deduplicate the transformed records, removing exact and near-duplicate entries; depends on the transform stage", "must_have": true},
+    {"id": "R5", "text": "Load the deduplicated records into the target warehouse; depends on the deduplicate stage", "must_have": true},
+    {"id": "R6", "text": "Notify downstream consumers that fresh data is available; depends on the load stage", "must_have": true}
+  ],
+  "known_issues": ["strict linear chain of 6 stages where each explicitly depends on the immediately prior stage; stresses dependency ordering and backward-reference (depends_on_index) resolution"],
+  "hallucination_traps": ["must not invent forward references or dependencies on later stages", "must not parallelize or reorder stages; must not add dependencies not stated in the text"],
+  "notes": "Every task except the first should depend on the immediately prior one, in creation order (ingest -> validate -> transform -> deduplicate -> load -> notify). depends_on_index must always point backward to the preceding task."
+}

@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "study": "spec-interpreter-baseline-v1",
+  "status": "complete",
+  "canonical_baseline_path": "eval/runs/2026-07-04_complete",
+  "batch_history": {
+    "2026-07-03_partial": "initial live Groq run; prd19 2/3 + prd20 all quota-blocked (E0)",
+    "2026-07-04_recovery": "re-ran the 5 quota-blocked runs after daily quota reset",
+    "2026-07-04_complete": "canonical = partial with the 5 E0 stubs replaced by recovered runs"
+  },
+  "archive_paths": [
+    "eval/archive/incomplete_quota_batch"
+  ],
+  "recovery_batches": [
+    "eval/runs/2026-07-04_recovery"
+  ],
+  "recovered_runs": [
+    "prd19_edge_nonprd_run2",
+    "prd19_edge_nonprd_run3",
+    "prd20_edge_deep_deps_run1",
+    "prd20_edge_deep_deps_run2",
+    "prd20_edge_deep_deps_run3"
+  ],
+  "timestamp": "2026-07-04T00:31:22",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "source_label": "live-groq-llama-3.3-70b-versatile",
+  "git_tag": "baseline-v1-complete",
+  "git_commit": "2de7b5ea738983ac140a5788b6981261688e0c4f",
+  "supersedes": {
+    "tag": "baseline-v1-partial",
+    "commit": "1dda05591dfe950cd41b4f8e0e0f9acb499d8980"
+  },
+  "evaluation_settings": {
+    "runs_per_prd": 3,
+    "temperature": 0.2,
+    "response_format": "json_object",
+    "rate_limit": "429 exp-backoff 5 attempts",
+    "runner_python": "base Python311 (venv311/.venv broken: openai __init__ missing)"
+  },
+  "scoring_policy": {
+    "file": "eval/scoring_policy.md",
+    "primary_metric": "relaxed_S5",
+    "secondary_metric": "strict_S5",
+    "E1": "empty output where gold expected_task_count.min>0 and not E0"
+  },
+  "totals": {
+    "prds": 20,
+    "runs": 60,
+    "tasks": 445,
+    "clean_runs": 27,
+    "E0": 0,
+    "E1": 3,
+    "schema_violations": 87,
+    "dep_violations": 6,
+    "strict_s5": 84,
+    "relaxed_s5": 22,
+    "mean_jaccard": 0.49
+  }
+}

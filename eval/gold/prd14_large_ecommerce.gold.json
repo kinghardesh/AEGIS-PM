@@ -1,0 +1,36 @@
+{
+  "prd_id": "prd14",
+  "file": "prd14_large_ecommerce.md",
+  "title": "E-Commerce Platform",
+  "category": "large",
+  "difficulty": "hard",
+  "expected_task_count": {"min": 15, "max": 25},
+  "requirements": [
+    {"id": "R1", "text": "Merchants can create, edit, and delete products (name, description, images, price, SKU, category)", "must_have": true},
+    {"id": "R2", "text": "Products are organized into categories that form the browsable storefront structure", "must_have": true},
+    {"id": "R3", "text": "Customers browse the catalog by category and view a product detail page with all info and images", "must_have": true},
+    {"id": "R4", "text": "Customers can search the catalog by keyword against product names and descriptions", "must_have": true},
+    {"id": "R5", "text": "Search results are filterable by category and price range, and sortable by price and newest", "must_have": true},
+    {"id": "R6", "text": "Customers add products to a cart that persists across sessions for logged-in users", "must_have": true},
+    {"id": "R7", "text": "Customers can update line-item quantity or remove a line item; cart shows a running subtotal", "must_have": true},
+    {"id": "R8", "text": "Checkout collects shipping and billing addresses, shows an order summary, and requires authentication; blocked when cart is empty", "must_have": true},
+    {"id": "R9", "text": "Shipping cost is calculated from destination address and total order weight and shown at checkout", "must_have": true},
+    {"id": "R10", "text": "Payment is processed via Stripe by charging the order total; success marks the order paid, failure shows an error", "must_have": true},
+    {"id": "R11", "text": "On successful payment an order record is created capturing line items, addresses, shipping cost, and total", "must_have": true},
+    {"id": "R12", "text": "Customers can view order history and per-order status; merchants can view all orders and update status", "must_have": true},
+    {"id": "R13", "text": "Each product tracks stock; placing an order decrements stock; zero-stock products are out of stock and not addable to cart", "must_have": true},
+    {"id": "R14", "text": "After successful payment, an email receipt is sent to the customer with order number, line items, totals, and shipping address", "must_have": true},
+    {"id": "R15", "text": "Customers who purchased a product can leave a 1-5 star rating and written review; product page shows average rating and reviews", "must_have": true},
+    {"id": "R16", "text": "Logged-in customers can add/remove products to a wishlist, view it on a dedicated page, and move items into the cart", "must_have": true},
+    {"id": "R17", "text": "Merchants use an admin panel (restricted to merchant accounts) for product, category, order, and inventory management", "must_have": true}
+  ],
+  "known_issues": [],
+  "hallucination_traps": [
+    "Do not add multi-currency support (explicitly out of scope)",
+    "Do not add promotions, coupons, or discount codes (explicitly out of scope)",
+    "Do not add returns/RMA processing (explicitly out of scope)",
+    "Do not invent guest checkout (checkout requires authentication)",
+    "Do not invent payment providers other than Stripe"
+  ],
+  "notes": "A faithful parser should decompose this into ~15-25 tasks and preserve the stated dependency chain: checkout depends on cart and shipping calculation; payment depends on checkout; order creation depends on payment; inventory decrement and email receipt depend on order creation. Reviews should encode the purchase-gating constraint. Admin panel access is restricted to merchant accounts."
+}

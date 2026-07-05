@@ -1,0 +1,29 @@
+{
+  "prd_id": "prd11",
+  "file": "prd11_incomplete_payments.md",
+  "title": "Add Payments for Subscriptions",
+  "category": "incomplete",
+  "difficulty": "hard",
+  "expected_task_count": {"min": 1, "max": 4},
+  "requirements": [
+    {"id": "R1", "text": "Allow users to pay for a subscription", "must_have": true},
+    {"id": "R2", "text": "Associate a payment with the paying user's account", "must_have": true},
+    {"id": "R3", "text": "Activate the subscription once payment succeeds", "must_have": true}
+  ],
+  "known_issues": [
+    "Payment provider is unspecified (no Stripe/PayPal/Braintree named)",
+    "Currency or supported currencies are unspecified",
+    "Plan tiers and their prices are undefined",
+    "Tax handling is undefined",
+    "Refund policy is undefined"
+  ],
+  "hallucination_traps": [
+    "Do not invent Stripe (or any specific provider) as the integration",
+    "Do not invent USD (or any specific currency)",
+    "Do not invent plan tiers, price points, or a free/pro/enterprise structure",
+    "Do not invent tax logic (VAT, sales tax, tax rates)",
+    "Do not invent a refund window or refund workflow",
+    "Do not invent webhooks, checkout sessions, or provider-specific concepts"
+  ],
+  "notes": "A faithful parser should emit only the 2-4 generic, stated tasks (accept payment, link to account, activate subscription on success) and surface the open questions as blockers/assumptions rather than resolving them. It must not fabricate provider, currency, tiers, tax, or refunds."
+}

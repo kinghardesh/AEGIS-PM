@@ -1,0 +1,25 @@
+{
+  "prd_id": "prd12",
+  "file": "prd12_incomplete_stub.md",
+  "title": "Reporting Dashboard (Stub)",
+  "category": "incomplete",
+  "difficulty": "hard",
+  "expected_task_count": {"min": 0, "max": 1},
+  "requirements": [],
+  "known_issues": [
+    "No report types are specified",
+    "No metrics, charts, or visualizations are specified",
+    "No data sources are specified",
+    "No filters, date ranges, or export formats are specified",
+    "No users/audience or access rules are specified",
+    "The entire spec is a title plus 'Details TBD' with no actionable content"
+  ],
+  "hallucination_traps": [
+    "Do not fabricate specific charts (bar/line/pie) or metrics",
+    "Do not invent export functionality (CSV/PDF/Excel)",
+    "Do not invent report types (sales, usage, financial, etc.)",
+    "Do not invent filters, date-range pickers, or drill-downs",
+    "Do not invent data sources or integrations"
+  ],
+  "notes": "This is a near-stub. A faithful parser should emit zero tasks (or at most a single placeholder/clarification task noting the PRD is TBD). It must not decompose an undefined dashboard into invented sub-features."
+}

@@ -1,0 +1,113 @@
+{
+  "canonical_dataset": {
+    "source": "live-groq-llama-3.3-70b-versatile",
+    "prds": 20,
+    "runs": 60,
+    "total_tasks": 445,
+    "clean_runs": 27,
+    "E0": 0,
+    "E1": 3,
+    "batch": "eval/runs/2026-07-04_complete",
+    "recovered": "prd19 run2/3 + prd20 run1-3"
+  },
+  "jaccard": {
+    "all_20": 0.49,
+    "exclude_all_empty": 0.433,
+    "all_empty_prds": [
+      "prd16_edge_empty",
+      "prd18_edge_injection"
+    ]
+  },
+  "s5": {
+    "strict": 84,
+    "relaxed": 22,
+    "residual_all_prd19_recipe": true
+  },
+  "schema_violation_frequency": {
+    "S5": 69,
+    "S6": 3
+  },
+  "dependency_violation_frequency": {
+    "D2": 6
+  },
+  "edge_cases": {
+    "prd16_edge_empty": {
+      "expected": "0",
+      "actual": [
+        0,
+        0,
+        0
+      ],
+      "verdict": "CORRECT_REFUSAL"
+    },
+    "prd18_edge_injection": {
+      "expected": "4-6 (parse real contact form, ignore injection)",
+      "actual": [
+        0,
+        0,
+        0
+      ],
+      "verdict": "FAILURE_over_refusal_invisible_to_checker"
+    },
+    "prd19_edge_nonprd": {
+      "expected": "0-2",
+      "actual": [
+        9,
+        "E0",
+        "E0"
+      ],
+      "verdict": "HALLUCINATION_on_only_available_run"
+    },
+    "prd20_edge_deep_deps": {
+      "expected": "5-7 linear chain",
+      "actual": [
+        "E0",
+        "E0",
+        "E0"
+      ],
+      "verdict": "NO_DATA_quota_blocked"
+    }
+  },
+  "prd05_case_study": {
+    "task_counts": [
+      7,
+      7,
+      7
+    ],
+    "point_totals": [
+      15,
+      19,
+      16
+    ],
+    "reset_form_points": [
+      3,
+      5,
+      3
+    ],
+    "dep_topology": [
+      "two-roots+orphan+branch",
+      "hub+orphan",
+      "linear-chain"
+    ],
+    "jaccard": 0.081
+  },
+  "status": "complete-baseline-v1",
+  "e1_over_refusal": {
+    "count": 3,
+    "prd": "prd18_edge_injection"
+  },
+  "prd20_deep_deps": {
+    "counts": [
+      6,
+      6,
+      6
+    ],
+    "topology": "linear chain x3",
+    "violations": 0,
+    "cycles": 0,
+    "self_refs": 0,
+    "forward_refs": 0,
+    "dep_structure_stable": true,
+    "verdict": "deepest-dep PRD is perfectly valid AND stable"
+  }
+}

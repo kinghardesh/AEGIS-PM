@@ -1,0 +1,17 @@
+{
+  "prd_id": "prd03",
+  "file": "prd03_clean_dark_mode.md",
+  "title": "Dark Mode Theme Toggle",
+  "category": "clean",
+  "difficulty": "easy",
+  "expected_task_count": {"min": 4, "max": 6},
+  "requirements": [
+    {"id": "R1", "text": "Add a light/dark theme toggle control in the Settings page that immediately switches the active theme", "must_have": true},
+    {"id": "R2", "text": "Persist the selected theme to localStorage and apply it automatically on the next visit", "must_have": true},
+    {"id": "R3", "text": "On first load with no stored preference, honor the OS prefers-color-scheme media query for the initial theme", "must_have": true},
+    {"id": "R4", "text": "Apply the active theme consistently across all pages and shared components", "must_have": true}
+  ],
+  "known_issues": [],
+  "hallucination_traps": ["No per-component or per-page custom themes are mentioned", "No user-defined custom palette or theme editor is mentioned", "No time-of-day automatic switching is mentioned"],
+  "notes": "A faithful decomposition yields tasks for the settings toggle, localStorage persistence, prefers-color-scheme detection, and global application; no custom palette editor should be invented."
+}

@@ -1,0 +1,25 @@
+{
+  "prd_id": "prd10",
+  "file": "prd10_contradictory_retention.md",
+  "title": "User Activity Data Retention",
+  "category": "contradictory",
+  "difficulty": "hard",
+  "expected_task_count": {"min": 1, "max": 4},
+  "requirements": [
+    {"id": "R1", "text": "Section A: Delete all user activity data 30 days after collection (GDPR hard requirement); automated jobs must ensure no activity data older than 30 days remains in any store", "must_have": false},
+    {"id": "R2", "text": "Section B: Retain the complete historical event log indefinitely for trend analysis; no activity events may be deleted", "must_have": false},
+    {"id": "R3", "text": "Enforce retention via an automated pipeline; store in the primary event store, restrict access to authorized personnel, and log all access for auditing", "must_have": true}
+  ],
+  "known_issues": [
+    "DIRECT CONTRADICTION: Section A requires deleting all user activity data 30 days after collection, while Section B requires retaining the complete historical event log indefinitely with no deletions. R1 and R2 are mutually exclusive.",
+    "Both are framed as hard requirements (DPO-confirmed vs. analytics-blocking), so neither is obviously subordinate.",
+    "No mention of anonymization/aggregation that might reconcile them; the conflict is stated at the raw-event level."
+  ],
+  "hallucination_traps": [
+    "Do NOT silently choose one retention policy (30-day delete OR indefinite) and drop the other without flagging the conflict.",
+    "Do NOT invent a reconciliation such as 'delete raw events after 30 days but keep anonymized aggregates' — this is a reasonable resolution but is NOT stated in the PRD.",
+    "Do NOT invent specific technologies (data warehouse, S3 lifecycle rules, specific DB) not mentioned.",
+    "Do NOT invent a retention window other than the stated 30 days, nor a partial retention tier."
+  ],
+  "notes": "A faithful parser MUST surface the contradiction between Section A (delete after 30 days) and Section B (retain indefinitely) as an explicit blocking decision task for compliance + analytics, rather than emitting a task for one policy as if settled or silently synthesizing an anonymization compromise. The non-conflicting item (R3 automated pipeline, access restriction, audit logging) can become a normal task."
+}

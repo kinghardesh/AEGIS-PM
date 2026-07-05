@@ -1,0 +1,27 @@
+{
+  "prd_id": "prd06",
+  "file": "prd06_ambiguous_performance.md",
+  "title": "Performance Improvements",
+  "category": "ambiguous",
+  "difficulty": "hard",
+  "expected_task_count": {"min": 1, "max": 3},
+  "requirements": [
+    {"id": "R1", "text": "Improve the perceived and actual performance/speed of the application", "must_have": true},
+    {"id": "R2", "text": "Measure and report on performance improvements by end of quarter", "must_have": true}
+  ],
+  "known_issues": [
+    "No target metric or latency budget is given (no ms target, no percentile, no throughput number).",
+    "Which pages, screens, or endpoints are slow is never named — 'across the board' and 'use your judgment' defer scope entirely.",
+    "No baseline is stated, so 'noticeably faster' and 'biggest impact' are unmeasurable as written.",
+    "Layer is unspecified beyond 'front-end, back-end, database — wherever' — no concrete area is committed to.",
+    "'Measure things appropriately' does not define which metrics or tooling."
+  ],
+  "hallucination_traps": [
+    "Do NOT invent a numeric target such as 'reduce load to <200ms on the dashboard' or 'p95 under 500ms'.",
+    "Do NOT invent specific slow pages (e.g. dashboard, search results, checkout) that the PRD never names.",
+    "Do NOT invent specific tooling (Lighthouse, New Relic, Datadog) unless surfaced as a suggestion needing confirmation.",
+    "Do NOT invent a specific bottleneck (e.g. 'N+1 queries', 'unindexed table') as if it were stated.",
+    "Do NOT invent a percentage improvement goal (e.g. '30% faster')."
+  ],
+  "notes": "A faithful parser should produce a task to define performance targets, baselines, and in-scope pages/endpoints BEFORE optimization work — i.e. surface the missing metrics and scope as an open question rather than silently choosing a page or inventing a latency budget. Any optimization task must be flagged as blocked on those decisions."
+}

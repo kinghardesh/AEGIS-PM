@@ -1,0 +1,25 @@
+{
+  "prd_id": "prd13",
+  "file": "prd13_incomplete_todos.md",
+  "title": "Customer Portal (TODO Skeleton)",
+  "category": "incomplete",
+  "difficulty": "hard",
+  "expected_task_count": {"min": 0, "max": 1},
+  "requirements": [],
+  "known_issues": [
+    "Every requirement is a literal TODO/placeholder, not a real requirement",
+    "Login flow is named but not defined (no steps, no auth method, no AC)",
+    "Report types are referenced but never listed",
+    "Notification settings are referenced but never described",
+    "Two checkbox lines ('fill in later', 'TODO: acceptance criteria') contain no content",
+    "Background, Non-Goals, and acceptance criteria are all TODO"
+  ],
+  "hallucination_traps": [
+    "Do not turn 'TODO: define login flow' into a real login task with invented acceptance criteria",
+    "Do not invent report types to satisfy 'list the report types'",
+    "Do not invent notification setting options",
+    "Do not treat '[ ] fill in later' or 'TODO: acceptance criteria' as work items",
+    "Do not synthesize a portal architecture from the section headings"
+  ],
+  "notes": "A faithful parser must recognize TODO/placeholder/[ ] lines as unfilled stubs, not requirements. It should emit zero real tasks (or at most one clarification task flagging that the requirements are undefined) and must not invent AC for named-but-undefined features."
+}

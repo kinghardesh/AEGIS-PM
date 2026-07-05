@@ -1,0 +1,27 @@
+{
+  "prd_id": "prd08",
+  "file": "prd08_ambiguous_search.md",
+  "title": "Search",
+  "category": "ambiguous",
+  "difficulty": "hard",
+  "expected_task_count": {"min": 1, "max": 3},
+  "requirements": [
+    {"id": "R1", "text": "Add a search feature with a search box that returns relevant results for the user's typed query", "must_have": true},
+    {"id": "R2", "text": "Search should be fast enough not to get in the way", "must_have": true}
+  ],
+  "known_issues": [
+    "Search scope is undefined — which entities/records/content are searchable is never stated ('find things', 'the main things').",
+    "Relevance/ranking is described only as 'relevant' and 'make sense' with no ranking rule or ordering criteria.",
+    "No filters, facets, or query operators are specified.",
+    "'Fast enough' gives no latency target.",
+    "It is unclear whether search is global or scoped to a section; 'covers the main things' is not concrete."
+  ],
+  "hallucination_traps": [
+    "Do NOT invent a backend such as Elasticsearch, Algolia, OpenSearch, or a specific DB full-text engine.",
+    "Do NOT invent fuzzy matching, typo tolerance, autocomplete, or synonyms as stated requirements.",
+    "Do NOT invent filters/facets (date, type, status) the PRD never lists.",
+    "Do NOT invent which entity types are searchable (e.g. 'users, documents, projects').",
+    "Do NOT invent a ranking algorithm (e.g. BM25, recency-weighted) as if specified."
+  ],
+  "notes": "A faithful parser should produce a task to define search scope (which entities are searchable), ranking/relevance criteria, and any filters — surfacing these as open questions. It must not emit implementation tasks naming a specific search engine, filter set, or matching strategy that the PRD did not state."
+}
