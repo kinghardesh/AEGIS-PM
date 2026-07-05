@@ -54,6 +54,9 @@ up_log.txt
 # Ad-hoc dry-run dump at repo root. Canonical eval runs live under eval/runs/
 # with explicit prd*_run*.json names and are NEVER matched by this.
 out.json
+# Redundant short-named mirror of eval/runs/. Canonical data lives in
+# eval/runs/<batch>/; this convenience mirror is not version-controlled.
+outputs/
 
 # ── Database ───────────────────────────────────────────────────────────────
 *.sqlite

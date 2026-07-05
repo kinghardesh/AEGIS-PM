@@ -1,0 +1,27 @@
+{
+  "source": "live-groq-llama-3.3-70b-versatile",
+  "runs_per_prd": 3,
+  "generated_at": "2026-07-04T13:44:26",
+  "prds": [
+    "prd01_clean_auth",
+    "prd02_clean_csv_export",
+    "prd03_clean_dark_mode",
+    "prd04_clean_rate_limit",
+    "prd05_clean_password_reset",
+    "prd06_ambiguous_performance",
+    "prd07_ambiguous_notifications",
+    "prd08_ambiguous_search",
+    "prd09_contradictory_auth",
+    "prd10_contradictory_retention",
+    "prd11_incomplete_payments",
+    "prd12_incomplete_stub",
+    "prd13_incomplete_todos",
+    "prd14_large_ecommerce",
+    "prd15_large_saas_admin",
+    "prd16_edge_empty",
+    "prd17_edge_unicode",
+    "prd18_edge_injection",
+    "prd19_edge_nonprd",
+    "prd20_edge_deep_deps"
+  ]
+}
