@@ -1,0 +1,18 @@
+{
+  "prd_id": "prd01",
+  "file": "prd01_clean_auth.md",
+  "title": "Email/Password User Authentication",
+  "category": "clean",
+  "difficulty": "easy",
+  "expected_task_count": {"min": 5, "max": 7},
+  "requirements": [
+    {"id": "R1", "text": "Implement a registration endpoint accepting email and password, rejecting duplicate emails and validating email format and minimum password length", "must_have": true},
+    {"id": "R2", "text": "Hash and store passwords using bcrypt, never persisting plaintext passwords", "must_have": true},
+    {"id": "R3", "text": "Implement a login endpoint that verifies the password against the stored bcrypt hash and rejects invalid credentials", "must_have": true},
+    {"id": "R4", "text": "Issue a signed JWT access token encoding user identity and expiry on successful login", "must_have": true},
+    {"id": "R5", "text": "Implement a logout endpoint that ends the user's session", "must_have": true}
+  ],
+  "known_issues": [],
+  "hallucination_traps": ["No OAuth or social login (Google, GitHub) is mentioned", "No multi-factor authentication is mentioned", "No password reset flow is in scope for this PRD"],
+  "notes": "A faithful decomposition yields separate tasks for registration, bcrypt hashing, login, JWT issuance, and logout; hashing may be folded into registration but should not introduce OAuth or MFA."
+}

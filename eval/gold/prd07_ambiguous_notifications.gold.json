@@ -1,0 +1,27 @@
+{
+  "prd_id": "prd07",
+  "file": "prd07_ambiguous_notifications.md",
+  "title": "User Notifications",
+  "category": "ambiguous",
+  "difficulty": "hard",
+  "expected_task_count": {"min": 1, "max": 3},
+  "requirements": [
+    {"id": "R1", "text": "Notify users about important events so they do not miss things happening in their accounts", "must_have": true},
+    {"id": "R2", "text": "Notifications should be timely and not overwhelming (balance frequency to avoid spam and avoid missed events)", "must_have": true}
+  ],
+  "known_issues": [
+    "Delivery channel is never specified — 'wherever makes the most sense' does not name email, push, SMS, in-app, or webhook.",
+    "'Important events' is never enumerated — no concrete event types are listed.",
+    "Frequency is described only qualitatively ('sweet spot', 'not too many/few') with no cadence, batching, or digest rule.",
+    "No definition of 'appropriately' / 'the right people ... right things ... right time' — targeting and rules are undefined.",
+    "No opt-out or preference mechanism is stated despite mentioning users 'turn them off'."
+  ],
+  "hallucination_traps": [
+    "Do NOT invent specific channels (email, push, SMS, Slack) that the PRD never commits to.",
+    "Do NOT invent a specific event list (e.g. 'password changed', 'payment failed', 'new comment').",
+    "Do NOT invent a concrete frequency such as 'daily digest' or 'max 3 per day'.",
+    "Do NOT invent a preferences/settings UI or per-channel toggles as if specified.",
+    "Do NOT assume a notifications infrastructure/provider (e.g. Firebase, Twilio, SES)."
+  ],
+  "notes": "A faithful parser should produce a task to define notification requirements — enumerate which events trigger notifications, which channel(s) to use, and frequency/cadence rules — surfacing these as open decisions. It should NOT emit implementation tasks for a specific channel or event as though those were stated."
+}

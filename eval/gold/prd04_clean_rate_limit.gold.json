@@ -1,0 +1,18 @@
+{
+  "prd_id": "prd04",
+  "file": "prd04_clean_rate_limit.md",
+  "title": "API Rate-Limiting Middleware",
+  "category": "clean",
+  "difficulty": "easy",
+  "expected_task_count": {"min": 4, "max": 6},
+  "requirements": [
+    {"id": "R1", "text": "Enforce rate limits using a token-bucket algorithm scoped per API key", "must_have": true},
+    {"id": "R2", "text": "Make bucket capacity and refill rate configurable via application configuration", "must_have": true},
+    {"id": "R3", "text": "Store rate-limit counters in Redis for consistent enforcement across all instances", "must_have": true},
+    {"id": "R4", "text": "Return an HTTP 429 (Too Many Requests) response when a key exceeds its limit", "must_have": true},
+    {"id": "R5", "text": "Include a Retry-After header on 429 responses indicating how long to wait", "must_have": true}
+  ],
+  "known_issues": [],
+  "hallucination_traps": ["No billing, paid quota tiers, or quota-purchase feature is mentioned", "No per-endpoint custom limits are in scope"],
+  "notes": "A faithful decomposition covers the token-bucket algorithm, configurable limits, Redis-backed counters, and the 429 + Retry-After response; must not invent billing or quota-purchase features."
+}

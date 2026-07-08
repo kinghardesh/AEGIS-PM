@@ -8,8 +8,9 @@ dist/
 build/
 .venv/
 venv/
-venv311/
+venv*/
 env/
+ENV/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
@@ -19,9 +20,10 @@ coverage.xml
 
 # ── Environment / Secrets ──────────────────────────────────────────────────
 .env
-.env.local
-.env.*.local
-# Keep .env.example tracked
+.env.*
+# keep the placeholder template tracked (negation must be its own line —
+# gitignore does NOT strip trailing comments)
+!.env.example
 
 # ── Auth credentials ───────────────────────────────────────────────────────
 nginx/.htpasswd
@@ -37,9 +39,24 @@ docker-compose.override.yml
 .DS_Store
 Thumbs.db
 
-# ── Logs ───────────────────────────────────────────────────────────────────
+# ── Logs / scratch dumps ───────────────────────────────────────────────────
 *.log
 logs/
+agents_err.txt
+agents_log.txt
+last_err.txt
+out.txt
+pure_logs.txt
+up_log.txt
+*.bin
+
+# ── Scratch / generated parser output ──────────────────────────────────────
+# Ad-hoc dry-run dump at repo root. Canonical eval runs live under eval/runs/
+# with explicit prd*_run*.json names and are NEVER matched by this.
+out.json
+# Redundant short-named mirror of eval/runs/. Canonical data lives in
+# eval/runs/<batch>/; this convenience mirror is not version-controlled.
+outputs/
 
 # ── Database ───────────────────────────────────────────────────────────────
 *.sqlite

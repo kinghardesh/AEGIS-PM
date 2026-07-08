@@ -1,0 +1,6 @@
+{
+  "source": "live-groq-llama-3.3-70b-versatile",
+  "runs_per_prd": 3,
+  "generated_at": "2026-07-04T00:26:36",
+  "note": "recovery of 5 quota-blocked runs (prd19 run2/3, prd20 run1-3)"
+}
