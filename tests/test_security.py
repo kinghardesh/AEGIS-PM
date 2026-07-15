@@ -57,23 +57,29 @@ class TestRateLimiter:
 class TestAuthEndpoints:
 
     async def test_rate_limit_raises_429(self, client, agent_headers):
-        """Simulate many rapid requests to trigger rate limiting."""
+        """Simulate many rapid requests to trigger rate limiting.
+
+        Uses GET /alerts, which carries the rate_limit dependency.
+        /health is deliberately exempt so Docker healthchecks and
+        load-balancer probes are never throttled.
+        """
         from api.security import _limiter
 
-        # Temporarily lower the limit for testing
+        # Temporarily lower the limit and start from a clean window
         original_max = _limiter._max
         _limiter._max = 3
+        _limiter._buckets.clear()
         try:
             for _ in range(3):
-                await client.get("/health")
+                res = await client.get("/alerts", headers=agent_headers)
+                assert res.status_code == 200
             # 4th request should 429
-            res = await client.get("/health")
+            res = await client.get("/alerts", headers=agent_headers)
             assert res.status_code == 429
         finally:
             _limiter._max = original_max
-            # Reset bucket
-            ip = "testclient"
-            _limiter._buckets.pop(ip, None)
+            # Reset buckets so the throttled window doesn't leak into other tests
+            _limiter._buckets.clear()
 
     async def test_request_id_header_in_response(self, client, agent_headers):
         res = await client.get("/health")

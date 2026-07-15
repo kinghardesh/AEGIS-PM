@@ -26,8 +26,10 @@ class TestJiraClient:
             mock_resp.json.return_value = {"issues": mock_stale_jira_issues, "total": 2}
             mock_resp.raise_for_status = MagicMock()
 
+            # search_issues uses POST /rest/api/3/search/jql (the old GET
+            # /rest/api/3/search endpoint was removed by Atlassian)
             mock_http.return_value.__aenter__ = AsyncMock(
-                return_value=MagicMock(get=AsyncMock(return_value=mock_resp))
+                return_value=MagicMock(post=AsyncMock(return_value=mock_resp))
             )
             mock_http.return_value.__aexit__ = AsyncMock(return_value=False)
 
@@ -43,7 +45,7 @@ class TestJiraClient:
         with patch("httpx.AsyncClient") as mock_http:
             mock_http.return_value.__aenter__ = AsyncMock(
                 return_value=MagicMock(
-                    get=AsyncMock(side_effect=httpx.TimeoutException("timeout"))
+                    post=AsyncMock(side_effect=httpx.TimeoutException("timeout"))
                 )
             )
             mock_http.return_value.__aexit__ = AsyncMock(return_value=False)

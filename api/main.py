@@ -150,7 +150,7 @@ alerts_table = sa.Table(
     sa.Column("last_updated",   sa.DateTime(timezone=True)),
     sa.Column("detected_at",    sa.DateTime(timezone=True),  server_default=sa.func.now()),
     sa.Column("status",         sa.String(32),               server_default="pending"),
-    sa.Column("slack_sent",     sa.Boolean,                  server_default="false"),
+    sa.Column("slack_sent",     sa.Boolean,                  server_default=sa.text("false")),
     sa.Column("slack_ts",       sa.String(64)),
     sa.Column("notes",          sa.Text),
     sa.Column("assignee_user_id",     sa.Integer),   # FK users.id — who owns it
@@ -197,7 +197,7 @@ employees_table = sa.Table(
     sa.Column("availability",sa.String(32),               server_default="available"),
     sa.Column("current_load",sa.Integer,                  server_default="0"),
     sa.Column("department",  sa.String(128)),       # org unit: engineering, legal, hr, ...
-    sa.Column("is_manager",  sa.Boolean,                  server_default="false"),
+    sa.Column("is_manager",  sa.Boolean,                  server_default=sa.text("false")),
     sa.Column("created_at",  sa.DateTime(timezone=True),  server_default=sa.func.now()),
 )
 
@@ -745,6 +745,50 @@ async def get_alert(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  Routes – Bulk actions
+#  (registered before the /alerts/{alert_id}/... routes so the literal "bulk"
+#   path segment is not captured as an alert_id)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.post(
+    "/alerts/bulk/approve",
+    summary="Bulk approve a list of pending alerts",
+    tags=["Alerts – Bulk"],
+)
+async def bulk_approve(
+    body: BulkActionRequest,
+    db: AsyncSession = Depends(get_db),
+    _auth: str = Depends(require_admin_key),
+    _rl: None = Depends(rate_limit),
+):
+    """
+    Approve multiple `pending` alerts in a single request.
+    Useful in the HITL dashboard when reviewing a batch.
+
+    Returns a summary of successes and failures.
+    Failures (e.g. wrong state) are reported but do not abort the batch.
+    """
+    return await _bulk_transition(body, to_status="approved", db=db)
+
+
+@app.post(
+    "/alerts/bulk/dismiss",
+    summary="Bulk dismiss a list of pending alerts",
+    tags=["Alerts – Bulk"],
+)
+async def bulk_dismiss(
+    body: BulkActionRequest,
+    db: AsyncSession = Depends(get_db),
+    _auth: str = Depends(require_admin_key),
+    _rl: None = Depends(rate_limit),
+):
+    """
+    Dismiss multiple `pending` alerts in a single request.
+    """
+    return await _bulk_transition(body, to_status="dismissed", db=db)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  Routes – State transitions
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -900,48 +944,6 @@ async def reopen_alert(
         actor=body.actor,
         notes=body.notes or "Reopened",
     )
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  Routes – Bulk actions
-# ══════════════════════════════════════════════════════════════════════════════
-
-@app.post(
-    "/alerts/bulk/approve",
-    summary="Bulk approve a list of pending alerts",
-    tags=["Alerts – Bulk"],
-)
-async def bulk_approve(
-    body: BulkActionRequest,
-    db: AsyncSession = Depends(get_db),
-    _auth: str = Depends(require_admin_key),
-    _rl: None = Depends(rate_limit),
-):
-    """
-    Approve multiple `pending` alerts in a single request.
-    Useful in the HITL dashboard when reviewing a batch.
-
-    Returns a summary of successes and failures.
-    Failures (e.g. wrong state) are reported but do not abort the batch.
-    """
-    return await _bulk_transition(body, to_status="approved", db=db)
-
-
-@app.post(
-    "/alerts/bulk/dismiss",
-    summary="Bulk dismiss a list of pending alerts",
-    tags=["Alerts – Bulk"],
-)
-async def bulk_dismiss(
-    body: BulkActionRequest,
-    db: AsyncSession = Depends(get_db),
-    _auth: str = Depends(require_admin_key),
-    _rl: None = Depends(rate_limit),
-):
-    """
-    Dismiss multiple `pending` alerts in a single request.
-    """
-    return await _bulk_transition(body, to_status="dismissed", db=db)
 
 
 async def _bulk_transition(

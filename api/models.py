@@ -25,7 +25,7 @@ users_table = sa.Table(
     sa.Column("password_hash", sa.Text,        nullable=False),
     sa.Column("role",          sa.String(16),  nullable=False, server_default="user"),
     sa.Column("employee_id",   sa.Integer),
-    sa.Column("is_active",     sa.Boolean,     nullable=False, server_default="true"),
+    sa.Column("is_active",     sa.Boolean,     nullable=False, server_default=sa.text("true")),
     sa.Column("last_login_at", sa.DateTime(timezone=True)),
     sa.Column("created_at",    sa.DateTime(timezone=True), server_default=sa.func.now()),
     sa.Column("updated_at",    sa.DateTime(timezone=True), server_default=sa.func.now()),
@@ -40,7 +40,7 @@ user_sessions_table = sa.Table(
     sa.Column("device",       sa.String(255)),
     sa.Column("user_agent",   sa.Text),
     sa.Column("ip_address",   sa.String(64)),
-    sa.Column("revoked",      sa.Boolean,     nullable=False, server_default="false"),
+    sa.Column("revoked",      sa.Boolean,     nullable=False, server_default=sa.text("false")),
     sa.Column("created_at",   sa.DateTime(timezone=True), server_default=sa.func.now()),
     sa.Column("last_seen_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     sa.Column("expires_at",   sa.DateTime(timezone=True), nullable=False),
@@ -156,7 +156,7 @@ employee_analysis_table = sa.Table(
     sa.Column("matched_skills",      sa.Text),
     sa.Column("missing_skills",      sa.Text),
     sa.Column("reason",              sa.Text),
-    sa.Column("semantic",            sa.Boolean,     nullable=False, server_default="false"),
+    sa.Column("semantic",            sa.Boolean,     nullable=False, server_default=sa.text("false")),
     sa.Column("analyzed_at",         sa.DateTime(timezone=True), server_default=sa.func.now()),
     sa.Column("analyzed_by_user_id", sa.Integer),
 )
@@ -171,7 +171,7 @@ employee_staging_table = sa.Table(
     sa.Column("skills",                   sa.Text),        # JSON array as text
     sa.Column("experience",               sa.Float),
     sa.Column("department",               sa.String(128)),  # org unit (parsed/inferred)
-    sa.Column("is_manager",               sa.Boolean,     server_default="false"),
+    sa.Column("is_manager",               sa.Boolean,     server_default=sa.text("false")),
     sa.Column("raw_metadata",             sa.JSON),
     sa.Column("upload_batch_id",          sa.String(64),  nullable=False),
     sa.Column("uploaded_by_user_id",      sa.Integer),
