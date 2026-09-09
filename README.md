@@ -1,191 +1,130 @@
 # Aegis PM
 
-Autonomous multi-agent project management. Six specialised AI agents built with Microsoft AutoGen collaborate across Jira, Slack, and GitHub to manage projects end-to-end.
+An autonomous multi-agent project-management system — and a frozen evaluation study of the one component in it that uses an LLM.
+
+Aegis PM watches a Jira board, flags work that has gone stale, notifies the right people in Slack, and turns a product requirements document into structured tasks. Nothing reaches Jira without human approval.
+
+The system is real and running in staging. The more interesting half of this repo is the evaluation: 20 gold-labelled PRDs, 3 runs each, a scoring policy locked in writing *before* the first run, and a full account of where the LLM component is unreliable.
+
+**Start here:** [`eval/baseline_report.md`](eval/baseline_report.md) · frozen at tag [`baseline-v1-complete`](../../releases/tag/baseline-v1-complete)
+
+---
+
+## Status
+
+**Staging. Not production.** No paying users, no production deployment, no uptime claims.
+
+| Component | State |
+|---|---|
+| Monitor agent (polls Jira for stale work, 5-min interval) | Live |
+| Communicator agent (Slack notifications) | Live |
+| Spec Interpreter agent (PRD → structured tasks, LLM-backed) | Live, and evaluated |
+| Approval dashboard (human-in-the-loop) | Live |
+| Three further agents described in early designs | **Not built** |
+
+---
+
+## What the evaluation found
+
+The Spec Interpreter is the only LLM component in the system. It takes a PRD and emits JSON: a task list with summaries, descriptions, issue types, priorities, Fibonacci story points, acceptance criteria, and dependency indices.
+
+Twenty PRDs across six difficulty tiers — clean, ambiguous, contradictory, incomplete, large, and edge cases — run three times each. 60 runs, 445 tasks generated, zero parse or quota errors.
+
+**Headline numbers, frozen at `baseline-v1-complete`:**
+
+| Metric | Result |
+|---|---|
+| Runs completed / attempted | 60 / 60 |
+| Content-level stability (mean Jaccard, empty input excluded) | **0.433** |
+| PRDs with stable task counts across 3 identical runs | 15 / 20 |
+| PRDs with stable dependency graphs across 3 identical runs | **6 / 20** |
+| Dependency violations (all self-references) | 6 / 445 tasks (1.3%) |
+| Gold-aware over-refusals | 3 |
+
+**Three findings worth your time:**
+
+**1. Instability is structural, not cosmetic.** The same PRD, byte-identical, run three times, does not just get reworded — it gets reorganised. PRD05, one of the *clean* specs, scored 0.081 Jaccard, with tasks merging and splitting between runs. Its dependency graph came out as a branched tree, then a hub-and-spoke, then a linear chain. Same input, three different shapes.
+
+**2. Estimate volatility is its own failure axis.** PRD05's sprint point totals across three runs were 15, 19, and 16 — roughly a 27% spread on identical input. On PRD20, run 1 differed on 3 of 6 estimates while the task summaries were byte-identical to run 2. Lexical stability, structural stability, estimate stability, and instruction adherence move independently. Measuring one tells you little about the others.
+
+**3. Refusal is miscalibrated in both directions.** Empty input was correctly refused. A legitimate spec carrying a prompt-injection string was refused three times out of three — a false positive on real work. And a banana bread recipe, submitted as a PRD, produced nine confident, well-formed engineering tickets, three times out of three. The system is more willing to fabricate from plausible-looking nonsense than to process a legitimate document that looks suspicious.
+
+Full method, threats to validity, and ten findings: [`eval/baseline_report.md`](eval/baseline_report.md).
+
+---
+
+## How the evaluation was run
+
+The methodology is the point, so it is stated plainly:
+
+- **Scoring policy written and locked before any runs**, in [`eval/scoring_policy.md`](eval/scoring_policy.md). Violation codes for schema (S1–S8), dependencies (D1–D4), and stability (T1–T3).
+- **Two metrics reported together, never separately.** Strict schema compliance measures instruction-following against the prompt's own verb whitelist; relaxed compliance accepts any ordinary engineering imperative. Strict shows 84 violations, relaxed shows 22. Reporting only one would be misleading, so both appear everywhere.
+- **Frozen baseline.** Tagged at a specific commit and never modified. Improvements will be measured as new tagged versions against this one, one variable at a time.
+- **Failed batches are quarantined, not deleted.** Two bad runs live in `eval/archive/` with notes explaining why they were excluded. Neither was scored.
+- **Raw outputs are kept verbatim.** Every run directory is timestamped and never overwritten; `eval/manifest.json` is the single source of truth.
+
+Known limitation, stated up front: hallucination detection here was incidental. The banana-bread fabrication was caught because the domain was obviously wrong. A plausible-sounding but invented *software* task would not have been detected by this harness. A gold-aware content check is the next piece of work, not a solved problem.
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  Monitor Agent  ──▶  Communicator Agent                         │
-│  (Jira poll)         (Slack notify)                             │
-│       │                    │                                    │
-│  Spec Interpreter     GroupChat Orchestrator                    │
-│  (PRD → tasks)        (optional unified mode)                   │
-│       └──────────────────┬─────────────────────┘               │
-│                  FastAPI Backend  (REST + API keys)             │
-│                       │                                         │
-│          ┌────────────┼──────────────┐                          │
-│      PostgreSQL   HITL Dashboard  Agent Health                  │
-│    (alerts + audit)  (nginx + auth)   (/agents/status)         │
-└─────────────────────────────────────────────────────────────────┘
+PRD ──► Spec Interpreter ──► structured tasks ──┐
+                                                 ├──► Approval dashboard ──► Jira
+Jira ──► Monitor ──► stale-work alerts ──────────┘
+                          │
+                          └──► Communicator ──► Slack
 ```
 
-### Agent Status
+- **Backend:** FastAPI, PostgreSQL, Alembic migrations
+- **Agents:** Microsoft AutoGen
+- **Auth:** two-tier API key, rate limiting; approval dashboard behind Basic Auth
+- **Alerting:** explicit state machine, no fire-and-forget notifications
+- **Tests:** pytest suite
+- **Deploy:** Docker
 
-| Agent | Status | Role |
-|---|---|---|
-| Monitor | ✅ | Polls Jira every 5 min, finds stale tasks |
-| Communicator | ✅ | Sends Slack notifications for approved alerts |
-| Spec Interpreter | ✅ | Parses PRDs → creates Jira tasks via LLM |
-| Planner & Scheduler | 🔜 | Timelines, dependencies, Gantt charts |
-| Resource Manager | 🔜 | Matches tasks to humans or AI agents |
-| HITL Supervisor | ✅ | Human approval via dashboard |
+Nothing writes to Jira without a human clicking approve. That is a design constraint, not a setting.
 
 ---
 
-## Quick Start
-
-**Prerequisites:** Docker + Compose 24+, Jira Cloud, Slack workspace, OpenAI key.
+## Quickstart
 
 ```bash
-# 1. Configure
-cp .env.example .env
-# Fill in JIRA_*, SLACK_WEBHOOK_URL, OPENAI_API_KEY, AGENT_API_KEY, ADMIN_API_KEY
-
-# 2. Generate dashboard password
-bash scripts/gen_htpasswd.sh --interactive
-
-# 3. Start
-docker compose up --build
+git clone https://github.com/kinghardesh/AEGIS-PM.git
+cd AEGIS-PM
+cp .env.example .env        # fill in Jira, Slack, and LLM provider keys
+docker compose up
 ```
 
-| URL | Purpose |
-|---|---|
-| http://localhost:3000 | HITL Dashboard (Basic Auth) |
-| http://localhost:8000/docs | API docs (Admin key required) |
-| http://localhost:8000/agents/status | Agent health |
-
----
-
-## Configuration
-
-| Variable | Default | Description |
-|---|---|---|
-| `STALE_DAYS` | `2` | Days without Jira update = stale |
-| `POLL_INTERVAL_SECONDS` | `300` | Jira poll interval |
-| `NOTIFY_COOLDOWN_HOURS` | `24` | Hours before re-notifying same task |
-| `AEGIS_MODE` | `agents` | `agents` or `groupchat` |
-| `OPENAI_MODEL` | `gpt-4-turbo` | Model for AutoGen agents |
-| `AEGIS_ENFORCE_AUTH` | `false` | Require API keys (`true` for prod) |
-| `HEALTH_ALERT_AFTER_FAILURES` | `2` | Failures before Slack health alert |
-| `RATE_LIMIT_REQUESTS` | `120` | Max requests per IP per minute |
-
----
-
-## API Reference
-
-All endpoints require `X-API-Key` when `AEGIS_ENFORCE_AUTH=true`.
-
-| Key | Access level |
-|---|---|
-| `AGENT_API_KEY` | Read + create alerts, mark notified |
-| `ADMIN_API_KEY` | All agent access + approve, dismiss, reopen, bulk |
-
-```
-GET  /health                    Liveness probe
-GET  /stats                     Alert counts by status
-GET  /agents/status             Agent health (no auth)
-
-GET  /alerts                    List (filters: status, assignee, task_key, dates, pagination)
-POST /alerts                    Create  [Agent]
-GET  /alerts/{id}               Single alert
-GET  /alerts/{id}/history       Audit trail
-
-POST /alerts/{id}/approve       pending → approved    [Admin]
-POST /alerts/{id}/dismiss       pending → dismissed   [Admin]
-POST /alerts/{id}/notified      approved → notified   [Agent]
-POST /alerts/{id}/reopen        any → pending         [Admin]
-POST /alerts/bulk/approve       Bulk approve          [Admin]
-POST /alerts/bulk/dismiss       Bulk dismiss          [Admin]
-```
-
----
-
-## Tests
+To reproduce the evaluation without touching Jira:
 
 ```bash
-pytest tests/ -v                              # all tests
-pytest tests/test_api.py -v                   # API endpoints
-pytest tests/test_monitor_agent.py -v         # Monitor unit tests
-pytest tests/test_spec_and_cooldown.py -v     # Spec + cooldown
-pytest tests/ --cov=api --cov=agents          # with coverage
+python -m eval.run_baseline --dry-run
+python eval/check_parse.py eval/runs/<timestamp>/
 ```
 
-No real Jira or Postgres needed — tests use in-memory SQLite and mocked HTTP.
+`--dry-run` parses only and writes nothing to Jira. All 60 baseline runs were produced this way.
 
 ---
 
-## Migrations
+## Known issues
 
-```bash
-alembic upgrade head          # apply all pending
-alembic current               # show version
-alembic downgrade -1          # roll back one step
-alembic revision --autogenerate -m "add column"  # generate from model changes
-```
+Listed because a repo that hides these is worse than one that has them:
 
----
-
-## Spec Interpreter
-
-```bash
-# Preview tasks without creating in Jira
-python -m agents.spec_interpreter --file docs/prd.md --dry-run
-
-# Create tasks
-python -m agents.spec_interpreter --file docs/prd.md
-
-# Programmatic
-from agents.spec_interpreter import SpecInterpreterAgent
-result = SpecInterpreterAgent().run_from_file("prd.md")
-print(result["issue_keys"])   # ['ENG-101', 'ENG-102', ...]
-```
+- Unnormalised log-level environment variable can crash the service on boot (`ValueError: Unknown level`)
+- Incomplete refactor leaves a stale import (`poll_stale_tasks`)
+- Dependency inference is untested. The one deep-dependency fixture states every edge in prose, so it demonstrates transcription, not inference. A proper fixture is planned.
 
 ---
 
-## Project Structure
+## Credits
 
-```
-aegis-pm/
-├── agents/
-│   ├── monitor_agent.py        Jira poll + tenacity + cooldown
-│   ├── communicator_agent.py   Slack Block Kit
-│   ├── spec_interpreter.py     PRD → Jira tasks
-│   ├── group_chat.py           AutoGen GroupChat orchestrator
-│   ├── runner.py               APScheduler entry point
-│   └── health/monitor.py       Health tracking + dead-man Slack alert
-├── api/
-│   ├── main.py                 FastAPI (all endpoints + state machine)
-│   └── security.py             API key auth + rate limiting
-├── migrations/
-│   ├── env.py                  Alembic env (reads .env)
-│   └── versions/001_baseline.py
-├── db/init.sql                 Schema bootstrap
-├── frontend/index.html         HITL Dashboard
-├── nginx/                      nginx config + Basic Auth
-├── tests/                      pytest suite (no real infra needed)
-├── scripts/
-│   ├── gen_htpasswd.sh         Generate dashboard credentials
-│   └── test_api.sh             Shell smoke tests
-├── docker-compose.yml
-├── docker-compose.override.yml Dev overrides
-├── Dockerfile.api              Multi-stage (dev + prod)
-├── Dockerfile.agents
-├── alembic.ini
-├── requirements.txt
-├── pytest.ini
-└── .env.example
-```
+- Backend, agents, and the evaluation study — Rahul ([@kinghardesh](https://github.com/kinghardesh))
+- Web frontend — Prithvi Singh Tomar ([@prithvi471](https://github.com/prithvi471))
 
----
+Implementation was substantially AI-assisted. Study design, methodology, failure diagnosis, and validation of every reported number are the author's own; all results were verified against raw run artifacts.
 
-## Security Checklist
+## License
 
-- [ ] `AEGIS_ENFORCE_AUTH=true` in production
-- [ ] Unique 64-char `AGENT_API_KEY` and `ADMIN_API_KEY`
-- [ ] `nginx/.htpasswd` generated (never committed — in `.gitignore`)
-- [ ] `CORS_ORIGINS` set to your actual domain
-- [ ] `.env` not committed (in `.gitignore`)
-- [ ] Strong `POSTGRES_PASSWORD`
+See [LICENSE](LICENSE).
